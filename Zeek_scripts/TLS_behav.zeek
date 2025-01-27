@@ -43,7 +43,7 @@ event tcp_packet(c: connection , is_orig: bool , flags: string , seq: count , ac
         local extension_length = 0;
         if(c$uid !in packet_sizes ){
             if((c$uid !in packet_sizes) && (bytestring_to_count(payload[start_index+5]) == 1) && (bytestring_to_count(payload[start_index]) == 22)){ #Cleint Hello
-                record_length = bytestring_to_count(payload[3:5]); #Extract the record length
+                record_length = bytestring_to_count(payload[6:9]); #Extract the record length
                 
                 start_index+=6; # Add the length till handshake type
                 start_index+=4; # Add the length directly before the Random
@@ -80,7 +80,7 @@ event tcp_packet(c: connection , is_orig: bool , flags: string , seq: count , ac
         }
         else if(|packet_sizes[c$uid]| == 2){
             if((bytestring_to_count(payload[start_index+5]) == 2) && (bytestring_to_count(payload[start_index]) == 22) ){ #Server Hello
-                record_length = bytestring_to_count(payload[3:5]); #Extract the record length
+                record_length = bytestring_to_count(payload[6:9]); #Extract the record length
 
                 start_index+=6; # Add the length till handshake type
                 start_index+=4; # Add the length directly before the Random
