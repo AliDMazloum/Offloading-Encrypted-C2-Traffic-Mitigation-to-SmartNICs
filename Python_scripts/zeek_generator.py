@@ -1,17 +1,12 @@
 import os
 import subprocess
 import argparse
-import sys
 from pathlib import Path
 
 parser = argparse.ArgumentParser(description="Generate and run Zeek scripts on .pcap files in a directory.")
 parser.add_argument('directory', type=str, help="Directory containing .pcap files.")
 parser.add_argument('zeek_file', type=str, help="zeek script to apply on pcap files.")
-# parser.add_argument('version',default=None, type=int, help="TLS version.")
 args = parser.parse_args()
-
-# directory = args.directory
-working_directory = Path().resolve()
 
 root_dir = args.directory
 zeek_file = args.zeek_file
@@ -20,21 +15,18 @@ with open(zeek_file, 'r') as f:
     zeek_script = f.read()
 
 directories = []
-for dirpath, dirnames, _ in os.walk(root_dir):
-    abs_path = os.path.join(working_directory,dirpath)
-    for dir in dirnames:
-        include_dir = False
-        for _, _, filenames in os.walk(dir):
-            if ".pcap" in filenames:
-                include_dir = True
-                break
-        if("zeek_logs" != dir and include_dir):
-            directories.append(os.path.join(abs_path,dir))
+for dirpath, dirnames, filenames in os.walk(root_dir):
+    dirnames[:] = [d for d in dirnames if d != "zeek_logs"]
+    if any(file.endswith('.pcap') for file in filenames):
+        directories.append(str(Path(dirpath).resolve()))
 
-print(directories)
+for dir in directories:
+    print(dir)
+# print(directories)
+exit(1)
 
 def generate_logs(directory, zeek_script):
-    zeek_files_dir = directory+"/zeek_logs"
+    zeek_files_dir = os.path.join(directory,"/zeek_logs")
     Path(zeek_files_dir).mkdir(parents=True, exist_ok=True)
 
     if not os.path.isdir(directory):
@@ -65,7 +57,6 @@ def generate_logs(directory, zeek_script):
                 command = ["/opt/zeek/bin/zeek", "-r", os.path.join(directory, pcap_file), zeek_script_filename,"-Cb"]
                 try:
                     subprocess.run(command, check=True)
-                    print(f"Successfully ran Zeek on {pcap_file}")
                 except subprocess.CalledProcessError as e:
                     print(f"Error running Zeek on {pcap_file}: {e}")
             
@@ -82,7 +73,6 @@ def generate_logs(directory, zeek_script):
                 command = ["/opt/zeek/bin/zeek", "-r", os.path.join(directory, pcap_file), zeek_script_filename,"-Cb"]
                 try:
                     subprocess.run(command, check=True)
-                    print(f"Successfully ran Zeek on {pcap_file}")
                 except subprocess.CalledProcessError as e:
                     print(f"Error running Zeek on {pcap_file}: {e}")
 
