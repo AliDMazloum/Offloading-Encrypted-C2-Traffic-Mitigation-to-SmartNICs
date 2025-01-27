@@ -1,4 +1,4 @@
-Zeek_scripts contains the scripts used to parse the PCAP files.
+#Zeek_scripts contains the scripts used to parse the PCAP files.
     - TLS_behav.zeek processes PCAP files and extract the features for the offline training
     - TLS_flow_stats.zeek processes the PCAP files and calculates the discribution of packets processed by P4 and those processed by DPDK
     
