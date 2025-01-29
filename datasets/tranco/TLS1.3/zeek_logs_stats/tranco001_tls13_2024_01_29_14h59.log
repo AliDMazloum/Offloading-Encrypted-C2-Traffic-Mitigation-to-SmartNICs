@@ -1,0 +1,10 @@
+#separator \x09
+#set_separator	,
+#empty_field	(empty)
+#unset_field	-
+#path	tranco001_tls13_2024_01_29_14h59
+#open	2025-01-28-21-41-48
+#fields	tls_flows	packets_parsed_in_P4	packets_parsed_in_DPDK	packet_ratio	bytes_parsed_in_P4	bytes_parsed_in_DPDK	bytes_ratio
+#types	double	double	double	double	double	double	double
+10436.0	795686.0	17747.0	2.230402	498618253.0	22548739.0	4.522245
+#close	2025-01-28-21-41-48

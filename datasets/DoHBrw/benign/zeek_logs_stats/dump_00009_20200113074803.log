@@ -1,0 +1,10 @@
+#separator \x09
+#set_separator	,
+#empty_field	(empty)
+#unset_field	-
+#path	dump_00009_20200113074803
+#open	2025-01-28-21-06-08
+#fields	tls_flows	packets_parsed_in_P4	packets_parsed_in_DPDK	packet_ratio	bytes_parsed_in_P4	bytes_parsed_in_DPDK	bytes_ratio
+#types	double	double	double	double	double	double	double
+6162.0	768516.0	12410.0	1.6148	621583215.0	9890455.0	1.591172
+#close	2025-01-28-21-06-08

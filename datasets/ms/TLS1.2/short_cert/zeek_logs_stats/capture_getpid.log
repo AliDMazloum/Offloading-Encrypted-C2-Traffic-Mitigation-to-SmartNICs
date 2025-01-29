@@ -1,0 +1,10 @@
+#separator \x09
+#set_separator	,
+#empty_field	(empty)
+#unset_field	-
+#path	capture_getpid
+#open	2025-01-28-21-14-31
+#fields	tls_flows	packets_parsed_in_P4	packets_parsed_in_DPDK	packet_ratio	bytes_parsed_in_P4	bytes_parsed_in_DPDK	bytes_ratio
+#types	double	double	double	double	double	double	double
+8725.0	174454.0	17451.0	10.00321	49672550.0	13883408.0	27.94986
+#close	2025-01-28-21-14-31

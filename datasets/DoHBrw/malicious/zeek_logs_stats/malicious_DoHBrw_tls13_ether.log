@@ -1,0 +1,10 @@
+#separator \x09
+#set_separator	,
+#empty_field	(empty)
+#unset_field	-
+#path	malicious_DoHBrw_tls13_ether
+#open	2025-01-28-21-13-23
+#fields	tls_flows	packets_parsed_in_P4	packets_parsed_in_DPDK	packet_ratio	bytes_parsed_in_P4	bytes_parsed_in_DPDK	bytes_ratio
+#types	double	double	double	double	double	double	double
+8908.0	57347050.0	17891.0	0.031198	4837258904.0	22063080.0	0.456107
+#close	2025-01-28-21-13-23

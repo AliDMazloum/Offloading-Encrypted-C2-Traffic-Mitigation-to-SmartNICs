@@ -1,0 +1,10 @@
+#separator \x09
+#set_separator	,
+#empty_field	(empty)
+#unset_field	-
+#path	capture_download_shadow
+#open	2025-01-28-21-14-25
+#fields	tls_flows	packets_parsed_in_P4	packets_parsed_in_DPDK	packet_ratio	bytes_parsed_in_P4	bytes_parsed_in_DPDK	bytes_ratio
+#types	double	double	double	double	double	double	double
+23705.0	470231.0	47410.0	10.082279	152247611.0	74291470.0	48.796477
+#close	2025-01-28-21-14-25
