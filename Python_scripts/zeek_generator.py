@@ -23,20 +23,24 @@ for dirpath, dirnames, filenames in os.walk(root_dir):
 for dir in directories:
     print(dir)
 # print(directories)
-exit(1)
+# exit(1)
 
 def generate_logs(directory, zeek_script):
-    zeek_files_dir = os.path.join(directory,"/zeek_logs")
-    Path(zeek_files_dir).mkdir(parents=True, exist_ok=True)
+    zeek_files_dir = directory+"/zeek_logs"
+    try:
+        Path(zeek_files_dir).mkdir(parents=True, exist_ok=True)
+    except:
+        print("Zee_logs directory cannot be created")
 
     if not os.path.isdir(directory):
         print(f"The directory {directory} does not exist.")
     else:
-        pcap_files12 = [f for f in os.listdir(directory) if f.endswith('.pcap') and (("tls12" in f or "capture" in f) or ("1.2" in directory))]
+        pcap_files12 = [f for f in os.listdir(directory) if f.endswith('.pcap') and (("tls12" in f or "capture" in f or "1.2" in directory))]
 
-        pcap_files13 = [f for f in os.listdir(directory) if f.endswith('.pcap') and (("tls13" in f or "capture" in f) or ("1.2" in directory))]
+        pcap_files13 = [f for f in os.listdir(directory) if (f.endswith('.pcap') and f not in pcap_files12)]
 
         if not pcap_files12 and not pcap_files13:
+            pcap_files13 = [f for f in os.listdir(directory) if f.endswith('.pcap')]
             print("No .pcap files found in the directory.")
         else:
             zeek_script_template = zeek_script
@@ -57,6 +61,7 @@ def generate_logs(directory, zeek_script):
                 command = ["/opt/zeek/bin/zeek", "-r", os.path.join(directory, pcap_file), zeek_script_filename,"-Cb"]
                 try:
                     subprocess.run(command, check=True)
+                    print(f"file {pcap_file} has been processed")
                 except subprocess.CalledProcessError as e:
                     print(f"Error running Zeek on {pcap_file}: {e}")
             
@@ -73,6 +78,7 @@ def generate_logs(directory, zeek_script):
                 command = ["/opt/zeek/bin/zeek", "-r", os.path.join(directory, pcap_file), zeek_script_filename,"-Cb"]
                 try:
                     subprocess.run(command, check=True)
+                    print(f"file {pcap_file} has been processed")
                 except subprocess.CalledProcessError as e:
                     print(f"Error running Zeek on {pcap_file}: {e}")
 

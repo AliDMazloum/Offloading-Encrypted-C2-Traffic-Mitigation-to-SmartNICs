@@ -7,7 +7,7 @@ from statistics import mode
 np.random.seed(42)
 
 ## import and get entries from trained models ##
-clf = pd.read_pickle('RF.pkl')
+clf = pd.read_pickle('RF_new.pkl')
 
 ## list the feature names
 # feature_names = ['Flow IAT Min', 'Max Packet Length', 'Flow IAT Max', 'Packet Length Total']

@@ -106,7 +106,7 @@ event tcp_packet(c: connection , is_orig: bool , flags: string , seq: count , ac
                 }
                 packet_sizes[c$uid][2]= record_length;
                 packet_sizes[c$uid][3]= number_of_extensions;
-                packet_sizes[c$uid][4]= "{tls_version}";
+                packet_sizes[c$uid][4]= {tls_version};
                 packet_lengths$tls_packet_lengths_record = packet_sizes[c$uid];
                 Log::write(testing::tls_packet_lengths, packet_lengths);
             }
