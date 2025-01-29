@@ -252,12 +252,4 @@ while (not all_ports_up):
     except Exception as e:
         print('An error occurred:', e)
 
-# forwarding = p4.Ingress.forwarding
-# fine_grained = p4.Ingress.fine_grained
-# coarse_grained = p4.Ingress.coarse_grained
-
-# forwarding.clear()
-# fine_grained.clear()
-# coarse_grained.clear()
-
 bfrt.complete_operations()
