@@ -1,525 +1,675 @@
-header Ethernet_h {
-	bit<48> dst_addr;
-	bit<48> src_add;
-	bit<16> ether_type;
-}
 
-header IPv4_h {
-	bit<4> version;
-	bit<4> ihl;
-	bit<8> diffserv;
-	bit<16> total_len;
-	bit<16> identification;
-	bit<3> flags;
-	bit<13> flag_offset;
-	bit<8> ttl;
-	bit<8> protocol;
-	bit<16> hdr_checksum;
-	bit<32> src_addr;
-	bit<32> dst_addr;
-}
+/***********************  P A R S E R  **************************/
 
-header TCP_h {
-	bit<16> src_port;
-	bit<16> dst_port;
-	bit<32> seq_no;
-	bit<32> ack_no;
-	bit<4> data_offset;
-	bit<4> res;
-	bit<8> flags;
-	bit<16> window;
-	bit<16> checksum;
-	bit<16> urgent_ptr;
-}
-
-header TCP_after_h {
-}
-
-header TCP_options_h {
-	bit<96> options;
-}
-
-header TLS_h {
-	bit<8> type;
-	bit<16> version;
-	bit<16> len;
-}
-
-header TLS_handshake_h {
-	bit<8> type;
-	bit<24> len;
-	bit<16> version;
-	bit<256> random;
-}
-
-header TLS_session_h {
-	bit<8> len;
-}
-
-header TLS_cipher_h {
-	bit<16> len;
-}
-
-header TLS_compression_h {
-	bit<8> len;
-}
-
-header TLS_extentions_len_h {
-	bit<16> len;
-}
-
-header TLS_extention_h {
-	bit<16> type;
-	bit<16> len;
-}
-
-header client_servername_part1_h {
-	bit<8> part1;
-}
-
-header client_servername_part2_h {
-	bit<16> part2;
-}
-
-header client_servername_part4_h {
-	bit<32> part4;
-}
-
-header client_servername_part8_h {
-	bit<64> part8;
-}
-
-header client_servername_part16_h {
-	bit<128> part16;
-}
-
-header client_servername_part32_h {
-	bit<256> part32;
-}
-
-header client_servername_h {
-	bit<8> type;
-	bit<16> len;
-	bit<16> sni_list_len;
-	bit<16> sni_len;
-}
-
-struct my_ingress_headers_t {
-	Ethernet_h Ethernet;
-	IPv4_h IPv4;
-	TCP_h TCP;
-	TCP_after_h TCP_after;
-	TCP_options_h TCP_options;
-	TLS_h TLS;
-	TLS_handshake_h TLS_handshake;
-	TLS_session_h TLS_session;
-	TLS_cipher_h TLS_cipher;
-	TLS_compression_h TLS_compression;
-	TLS_extentions_len_h TLS_extentions_len;
-	TLS_extention_h TLS_extention;
-	client_servername_h client_servername;
-	client_servername_part1_h client_servername_part1;
-	client_servername_part2_h client_servername_part2;
-	client_servername_part4_h client_servername_part4;
-	client_servername_part8_h client_servername_part8;
-	client_servername_part16_h client_servername_part16;
-	client_servername_part32_h client_servername_part32;
-
-}
-
-/******  G L O B A L   I N G R E S S   M E T A D A T A  *********/
-struct my_ingress_metadata_t {
-
-}
-
-/***********************  E G R E S S  H E A D E R S  ***************************/
-
-struct my_egress_headers_t {
-
-}
-
-/********  G L O B A L   E G R E S S   M E T A D A T A  *********/
-
-struct my_egress_metadata_t {
-}
-
-parser IngressParser(packet_in pkt,out my_ingress_headers_t hdr,
-    out my_ingress_metadata_t meta, out ingress_intrinsic_metadata_t  ig_intr_md)
+parser IngressParser(packet_in        pkt,
+    /* User */
+    out my_ingress_headers_t          hdr,
+    out my_ingress_metadata_t         meta,
+    /* Intrinsic */
+    out ingress_intrinsic_metadata_t  ig_intr_md)
 {
+
     state start {
-            pkt.extract(ig_intr_md);
-            pkt.advance(PORT_METADATA_SIZE);
-            transition parse_Ethernet_state1;
+        pkt.extract(ig_intr_md);
+        pkt.advance(PORT_METADATA_SIZE);
+        transition parse_ethernet;
+    }
+
+    state parse_ethernet {
+        pkt.extract(hdr.ethernet);
+        transition select(hdr.ethernet.ether_type) {
+            ETHERTYPE_IPV4:  parse_ipv4;
+            TYPE_DPDK : parse_dpdk_packet;
+            TYPE_RECIRC : parse_recirc;
+            default: accept;
         }
+    }
 
-	state parse_Ethernet_state1 {
-		pkt.extract(hdr.Ethernet);
-		transition select(hdr.Ethernet.ether_type){
-			2048: parse_IPv4_state1;
+    state parse_recirc {
+       pkt.extract(hdr.recirc);
+       transition parse_features;
+    }
+
+    state parse_features {
+        pkt.extract(hdr.features);
+        transition parse_ipv4_dpdk;
+    }
+
+    state parse_dpdk_packet {
+       pkt.extract(hdr.dpdk);
+       transition select(hdr.dpdk.type) {
+            TYPE_DPDK_PASS:  accept;
+            TYPE_DPDK_CLIENT : parse_dpdk_client;
+            TYPE_DPDK_Server : parse_dpdk_server;
+            default: accept;
+        }
+    }
+
+    state parse_dpdk_client {
+       pkt.extract(hdr.client_hello_dpdk);
+       transition parse_ipv4_dpdk;
+    }
+
+    state parse_dpdk_server {
+       pkt.extract(hdr.server_hello_dpdk);
+       transition parse_ipv4_dpdk;
+    }
+
+    state parse_ipv4 {
+        pkt.extract(hdr.ipv4);
+        transition select(hdr.ipv4.protocol) {
+            IP_PROTOCOLS_TCP : parse_tcp_ports;
+            default : accept;
+        }
+    }
+
+    state parse_ipv4_dpdk {
+        pkt.extract(hdr.ipv4);
+        transition select(hdr.ipv4.protocol) {
+            IP_PROTOCOLS_TCP : parse_tcp_ports_dpdk;
+            default : accept;
+        }
+    }
+
+    // state parse_tcp_ports {
+    //     pkt.extract(hdr.tcp_ports);
+    //     transition select(hdr.tcp_ports.ports) {
+    //         0x01BB0000 &&& 0xFFFF0000: parse_tcp;
+    //         0x000001BB &&& 0x0000FFFF: parse_tcp;
+    //         // 443: parse_tls;
+    //         default: accept;
+    //     }
+    // }
+
+    state parse_tcp_ports_dpdk {
+        pkt.extract(hdr.tcp_ports);
+        transition accept;
+    }
+
+    state parse_tcp_ports {
+        pkt.extract(hdr.tcp_ports);
+        transition select(hdr.tcp_ports.dst_port) {
+            443: parse_tcp;
+            default: parse_returning_traffic;
+        }
+    }
+
+    state parse_returning_traffic {
+        transition select(hdr.tcp_ports.src_port) {
+            443: parse_tcp;
+            default: accept;
+        }
+    }
+
+    state parse_tcp {
+        pkt.extract(hdr.tcp);
+        transition select(hdr.tcp.data_offset) {
+            0x05 : parse_tls;
+            0x08 : parse_tcp_options_08; 
+            default: accept;
+        }
+    }
+
+    state parse_tcp_options_08 {pkt.advance(96);transition parse_tls;}
+
+    state parse_tls {
+        pkt.extract(hdr.tls);
+		transition select(hdr.tls.type){
+			22: parse_tls_handshake;
+			default: accept;
+		}
+    }
+
+    state parse_tls_handshake {
+		pkt.extract(hdr.tls_handshake);
+		transition select(hdr.tls_handshake.type){
+			1: parse_tls_client_hello;
+			2: parse_tls_server_hello;
 			default: accept;
 		}
 	}
 
+    state parse_tls_client_hello {
+        // pkt.extract(hdr.tls_server_hello);
+        pkt.extract(hdr.tls_client_hello);
+        transition parse_session_ids;
+        // transition accept;
+    }
 
-	state parse_IPv4_state1 {
-		pkt.extract(hdr.IPv4);
-		transition select(hdr.IPv4.protocol){
-			6: parse_TCP_state1;
-			default: accept;
-		}
-	}
+    state parse_tls_server_hello {
+        pkt.extract(hdr.tls_server_hello);
+        transition accept;
+    }
 
-	state parse_TCP_state1 {
-		pkt.extract(hdr.TCP);
-		transition select(hdr.TCP.data_offset){
-			5: parse_TCP_after_state1;
-			8: parse_TCP_options_state1;
-			default: accept;
-		}
-	}
+    state parse_session_ids {
+        pkt.extract(hdr.hello_session);
+        transition select(hdr.hello_session.len[7:4]) {
+            0x00: skip_session_len_16_0;
+            0x01: skip_session_len_16_1;
+            0x02: skip_session_len_32_1;
+            0x03: skip_session_len_48_1;
+            default: unparsed_session;
+        }
+    }
 
+    state unparsed_session {
+        meta.unparsed = SESSION_LEN;
+        transition accept;
+    }
 
-	state parse_TCP_after_state1 {
-		pkt.extract(hdr.TCP_after);
-		transition select(hdr.TCP.dst_port){
-			443: parse_TLS_state1;
-			default: accept;
-		}
-	}
+    state skip_session_len_16_0 {
+        transition select(hdr.hello_session.len[3:3]) {
+            0x00: skip_session_len_8_0;
+            0x01: skip_session_len_8_1;
+        }
+    }
 
+    state skip_session_len_8_1 {pkt.advance(64);transition skip_session_len_8_0;}
+    state skip_session_len_16_1 {pkt.advance(128);transition skip_session_len_16_0;}
+    state skip_session_len_32_1 {pkt.advance(256);transition skip_session_len_16_0;}
+    state skip_session_len_48_1 {pkt.advance(384);transition skip_session_len_16_0;}
 
-	state parse_TCP_options_state1 {
-		pkt.extract(hdr.TCP_options);
-		transition select(hdr.TCP.dst_port){
-			443: parse_TLS_state1;
-			default: accept;
-		}
-	}
+    state skip_session_len_8_0 {
+        transition select(hdr.hello_session.len[2:0]) {
+            0x00: hello_cipher;
+            0x01: skip_session_len_1;
+            0x02: skip_session_len_2;
+            0x03: skip_session_len_3;
+            0x04: skip_session_len_4;
+            0x05: skip_session_len_5;
+            0x06: skip_session_len_6;
+            0x07: skip_session_len_7;
+        }
+    }
 
-	state parse_TLS_state1 {
-		pkt.extract(hdr.TLS);
-		transition select(hdr.TLS.type){
-			22: parse_TLS_handshake_state1;
-			default: accept;
-		}
-	}
-
-
-	state parse_TLS_handshake_state1 {
-		pkt.extract(hdr.TLS_handshake);
-		transition select(hdr.TLS_handshake.type){
-			1: parse_TLS_session_state3;
-			2: parse_TLS_session_state3;
-			default: accept;
-		}
-	}
-
-	state parse_TLS_session_state3 {
-		pkt.extract(hdr.TLS_session);
-		transition select(hdr.TLS_session.len[7:5]){
-			0: parse_TLS_session_state2;
-			1: skip_TLS_session_len32;
-			2: skip_TLS_session_len64;
-			3: skip_TLS_session_len96;
-			default: accept;
-		}
-	}
-
-	state skip_TLS_session_len32 { pkt.advance(256);transition parse_TLS_session_state2; }
-	state skip_TLS_session_len64 { pkt.advance(512);transition parse_TLS_session_state2; }
-	state skip_TLS_session_len96 { pkt.advance(768);transition parse_TLS_session_state2; }
-
-	state parse_TLS_session_state2 {
-		transition select(hdr.TLS_session.len[4:3]){
-			0: parse_TLS_session_state1;
-			1: skip_TLS_session_len8;
-			2: skip_TLS_session_len16;
-			3: skip_TLS_session_len24;
-		}
-	}
-
-	state skip_TLS_session_len8 { pkt.advance(64);transition parse_TLS_session_state1; }
-	state skip_TLS_session_len16 { pkt.advance(128);transition parse_TLS_session_state1; }
-	state skip_TLS_session_len24 { pkt.advance(192);transition parse_TLS_session_state1; }
-
-	state parse_TLS_session_state1 {
-		transition select(hdr.TLS_session.len[2:0]){
-			1: skip_TLS_session_len1;
-			2: skip_TLS_session_len2;
-			3: skip_TLS_session_len3;
-			4: skip_TLS_session_len4;
-			5: skip_TLS_session_len5;
-			6: skip_TLS_session_len6;
-			7: skip_TLS_session_len7;
-			default: parse_TLS_cipher_state3;
-		}
-	}
-
-	state skip_TLS_session_len1 { pkt.advance(8);transition parse_TLS_cipher_state3; }
-	state skip_TLS_session_len2 { pkt.advance(16);transition parse_TLS_cipher_state3; }
-	state skip_TLS_session_len3 { pkt.advance(24);transition parse_TLS_cipher_state3; }
-	state skip_TLS_session_len4 { pkt.advance(32);transition parse_TLS_cipher_state3; }
-	state skip_TLS_session_len5 { pkt.advance(40);transition parse_TLS_cipher_state3; }
-	state skip_TLS_session_len6 { pkt.advance(48);transition parse_TLS_cipher_state3; }
-	state skip_TLS_session_len7 { pkt.advance(56);transition parse_TLS_cipher_state3; }
-
-	state parse_TLS_cipher_state3 {
-		pkt.extract(hdr.TLS_cipher);
-		transition select(hdr.TLS_cipher.len[15:5]){
-			0: parse_TLS_cipher_state2;
-			1: skip_TLS_cipher_len32;
-			2: skip_TLS_cipher_len64;
-			3: skip_TLS_cipher_len96;
-			default: accept;
-		}
-	}
-
-	state skip_TLS_cipher_len32 { pkt.advance(256);transition parse_TLS_cipher_state2; }
-	state skip_TLS_cipher_len64 { pkt.advance(512);transition parse_TLS_cipher_state2; }
-	state skip_TLS_cipher_len96 { pkt.advance(768);transition parse_TLS_cipher_state2; }
-
-	state parse_TLS_cipher_state2 {
-		transition select(hdr.TLS_cipher.len[4:3]){
-			0: parse_TLS_cipher_state1;
-			1: skip_TLS_cipher_len8;
-			2: skip_TLS_cipher_len16;
-			3: skip_TLS_cipher_len24;
-		}
-	}
-
-	state skip_TLS_cipher_len8 { pkt.advance(64);transition parse_TLS_cipher_state1; }
-	state skip_TLS_cipher_len16 { pkt.advance(128);transition parse_TLS_cipher_state1; }
-	state skip_TLS_cipher_len24 { pkt.advance(192);transition parse_TLS_cipher_state1; }
-
-	state parse_TLS_cipher_state1 {
-		transition select(hdr.TLS_cipher.len[2:0]){
-			1: skip_TLS_cipher_len1;
-			default: parse_TLS_compression_state1;
-		}
-	}
-
-	state skip_TLS_cipher_len1 { pkt.advance(8);transition parse_TLS_compression_state1; }
-
-	state parse_TLS_compression_state1 {
-		pkt.extract(hdr.TLS_compression);
-		transition select(hdr.TLS_compression.len[7:0]){
-			1: skip_TLS_compression_len1;
-			default: accept;
-		}
-	}
-
-	state skip_TLS_compression_len1 { pkt.advance(8);transition parse_TLS_extentions_len_state1; }
-
-	state parse_TLS_extentions_len_state1 {
-		pkt.extract(hdr.TLS_extentions_len);
-		transition parse_TLS_extention_state1;
-	}
+    state skip_session_len_1 {pkt.advance(08); transition hello_cipher;}
+    state skip_session_len_2 {pkt.advance(16); transition hello_cipher;}
+    state skip_session_len_3 {pkt.advance(24); transition hello_cipher;}
+    state skip_session_len_4 {pkt.advance(32); transition hello_cipher;}
+    state skip_session_len_5 {pkt.advance(40); transition hello_cipher;}
+    state skip_session_len_6 {pkt.advance(48); transition hello_cipher;}
+    state skip_session_len_7 {pkt.advance(56); transition hello_cipher;}
 
 
-	state parse_TLS_extention_state1 {
-		bit<32> temp = pkt.lookahead<bit<32>>();
-		transition select(temp[31:16]){
-			0: parse_client_servername_state3;
-			default: skip_TLS_extention;
-		}
-	}
+    state hello_cipher {
+        pkt.extract(hdr.hello_ciphers);
+        transition select(hdr.hello_ciphers.len[13:4]) {
+            0x00: parse_cipher_len_16_0;
+            0x01: parse_cipher_len_16_1;
+            0x02: parse_cipher_len_32_1;
+            0x03: parse_cipher_len_48_1;
+            0x04: parse_cipher_len_64_1;
+            default: unparsed_cipher;
+        }
+    }
 
-	state skip_TLS_extention {
-		bit<32> temp = pkt.lookahead<bit<32>>();
-		transition select(temp[15:0]){
-			0: skip_TLS_extention_len0;
-			1: skip_TLS_extention_len1;
-			2: skip_TLS_extention_len2;
-			3: skip_TLS_extention_len3;
-			4: skip_TLS_extention_len4;
-			5: skip_TLS_extention_len5;
-			6: skip_TLS_extention_len6;
-			7: skip_TLS_extention_len7;
-			8: skip_TLS_extention_len8;
-			9: skip_TLS_extention_len9;
-			10: skip_TLS_extention_len10;
-			11: skip_TLS_extention_len11;
-			12: skip_TLS_extention_len12;
-			13: skip_TLS_extention_len13;
-			14: skip_TLS_extention_len14;
-			15: skip_TLS_extention_len15;
-			16: skip_TLS_extention_len16;
-			17: skip_TLS_extention_len17;
-			18: skip_TLS_extention_len18;
-			19: skip_TLS_extention_len19;
-			20: skip_TLS_extention_len20;
-			21: skip_TLS_extention_len21;
-			22: skip_TLS_extention_len22;
-			23: skip_TLS_extention_len23;
-			24: skip_TLS_extention_len24;
-			25: skip_TLS_extention_len25;
-			26: skip_TLS_extention_len26;
-			27: skip_TLS_extention_len27;
-			28: skip_TLS_extention_len28;
-			29: skip_TLS_extention_len29;
-			30: skip_TLS_extention_len30;
-			31: skip_TLS_extention_len31;
-			32: skip_TLS_extention_len32;
-			33: skip_TLS_extention_len33;
-			34: skip_TLS_extention_len34;
-			35: skip_TLS_extention_len35;
-			36: skip_TLS_extention_len36;
-			37: skip_TLS_extention_len37;
-			38: skip_TLS_extention_len38;
-			39: skip_TLS_extention_len39;
-			40: skip_TLS_extention_len40;
-			41: skip_TLS_extention_len41;
-			42: skip_TLS_extention_len42;
-			43: skip_TLS_extention_len43;
-			44: skip_TLS_extention_len44;
-			45: skip_TLS_extention_len45;
-			46: skip_TLS_extention_len46;
-			47: skip_TLS_extention_len47;
-			48: skip_TLS_extention_len48;
-			49: skip_TLS_extention_len49;
-			default: accept;
-		}
-	}
+    state unparsed_cipher {meta.unparsed = CIPHER_LIM;transition accept;}
 
-	state skip_TLS_extention_len0 {pkt.advance(32);transition parse_TLS_extention_state1;}
-	state skip_TLS_extention_len1 {pkt.advance(40);transition parse_TLS_extention_state1;}
-	state skip_TLS_extention_len2 {pkt.advance(48);transition parse_TLS_extention_state1;}
-	state skip_TLS_extention_len3 {pkt.advance(56);transition parse_TLS_extention_state1;}
-	state skip_TLS_extention_len4 {pkt.advance(64);transition parse_TLS_extention_state1;}
-	state skip_TLS_extention_len5 {pkt.advance(72);transition parse_TLS_extention_state1;}
-	state skip_TLS_extention_len6 {pkt.advance(80);transition parse_TLS_extention_state1;}
-	state skip_TLS_extention_len7 {pkt.advance(88);transition parse_TLS_extention_state1;}
-	state skip_TLS_extention_len8 {pkt.advance(96);transition parse_TLS_extention_state1;}
-	state skip_TLS_extention_len9 {pkt.advance(104);transition parse_TLS_extention_state1;}
-	state skip_TLS_extention_len10 {pkt.advance(112);transition parse_TLS_extention_state1;}
-	state skip_TLS_extention_len11 {pkt.advance(120);transition parse_TLS_extention_state1;}
-	state skip_TLS_extention_len12 {pkt.advance(128);transition parse_TLS_extention_state1;}
-	state skip_TLS_extention_len13 {pkt.advance(136);transition parse_TLS_extention_state1;}
-	state skip_TLS_extention_len14 {pkt.advance(144);transition parse_TLS_extention_state1;}
-	state skip_TLS_extention_len15 {pkt.advance(152);transition parse_TLS_extention_state1;}
-	state skip_TLS_extention_len16 {pkt.advance(160);transition parse_TLS_extention_state1;}
-	state skip_TLS_extention_len17 {pkt.advance(168);transition parse_TLS_extention_state1;}
-	state skip_TLS_extention_len18 {pkt.advance(176);transition parse_TLS_extention_state1;}
-	state skip_TLS_extention_len19 {pkt.advance(184);transition parse_TLS_extention_state1;}
-	state skip_TLS_extention_len20 {pkt.advance(192);transition parse_TLS_extention_state1;}
-	state skip_TLS_extention_len21 {pkt.advance(200);transition parse_TLS_extention_state1;}
-	state skip_TLS_extention_len22 {pkt.advance(208);transition parse_TLS_extention_state1;}
-	state skip_TLS_extention_len23 {pkt.advance(216);transition parse_TLS_extention_state1;}
-	state skip_TLS_extention_len24 {pkt.advance(224);transition parse_TLS_extention_state1;}
-	state skip_TLS_extention_len25 {pkt.advance(232);transition parse_TLS_extention_state1;}
-	state skip_TLS_extention_len26 {pkt.advance(240);transition parse_TLS_extention_state1;}
-	state skip_TLS_extention_len27 {pkt.advance(240);transition skip_TLS_extention_len1;}
-	state skip_TLS_extention_len28 {pkt.advance(240);transition skip_TLS_extention_len2;}
-	state skip_TLS_extention_len29 {pkt.advance(240);transition skip_TLS_extention_len3;}
-	state skip_TLS_extention_len30 {pkt.advance(240);transition skip_TLS_extention_len4;}
-	state skip_TLS_extention_len31 {pkt.advance(240);transition skip_TLS_extention_len5;}
-	state skip_TLS_extention_len32 {pkt.advance(240);transition skip_TLS_extention_len6;}
-	state skip_TLS_extention_len33 {pkt.advance(240);transition skip_TLS_extention_len7;}
-	state skip_TLS_extention_len34 {pkt.advance(240);transition skip_TLS_extention_len8;}
-	state skip_TLS_extention_len35 {pkt.advance(240);transition skip_TLS_extention_len9;}
-	state skip_TLS_extention_len36 {pkt.advance(240);transition skip_TLS_extention_len10;}
-	state skip_TLS_extention_len37 {pkt.advance(240);transition skip_TLS_extention_len11;}
-	state skip_TLS_extention_len38 {pkt.advance(240);transition skip_TLS_extention_len12;}
-	state skip_TLS_extention_len39 {pkt.advance(240);transition skip_TLS_extention_len13;}
-	state skip_TLS_extention_len40 {pkt.advance(240);transition skip_TLS_extention_len14;}
-	state skip_TLS_extention_len41 {pkt.advance(240);transition skip_TLS_extention_len15;}
-	state skip_TLS_extention_len42 {pkt.advance(240);transition skip_TLS_extention_len16;}
-	state skip_TLS_extention_len43 {pkt.advance(240);transition skip_TLS_extention_len17;}
-	state skip_TLS_extention_len44 {pkt.advance(240);transition skip_TLS_extention_len18;}
-	state skip_TLS_extention_len45 {pkt.advance(240);transition skip_TLS_extention_len19;}
-	state skip_TLS_extention_len46 {pkt.advance(240);transition skip_TLS_extention_len20;}
-	state skip_TLS_extention_len47 {pkt.advance(240);transition skip_TLS_extention_len21;}
-	state skip_TLS_extention_len48 {pkt.advance(240);transition skip_TLS_extention_len22;}
-	state skip_TLS_extention_len49 {pkt.advance(240);transition skip_TLS_extention_len23;}
+    state parse_cipher_len_16_0 {
+        transition select(hdr.hello_ciphers.len[3:1]) {
+            0x00: parse_compressions;
+            0x01: parse_cipher_len_1;
+            0x02: parse_cipher_len_2;
+            0x03: parse_cipher_len_3;
+            0x04: parse_cipher_len_4;
+            0x05: parse_cipher_len_5;
+            0x06: parse_cipher_len_6;
+            0x07: parse_cipher_len_7;
+        }
+    }
 
-	state parse_client_servername_state3 {
-		pkt.extract(hdr.client_servername);
-		transition select(hdr.client_servername.sni_len[15:5]){
-			0: parse_client_servername_state2;
-			1: parse_client_servername_part_32;
-			default: accept;
-		}
+    state parse_cipher_len_16_1 {pkt.advance(128);transition parse_cipher_len_16_0;}
+    state parse_cipher_len_32_1 {pkt.advance(256);transition parse_cipher_len_16_0;}
+    state parse_cipher_len_48_1 {pkt.advance(384);transition parse_cipher_len_16_0;}
+    state parse_cipher_len_64_1 {pkt.advance(512);transition parse_cipher_len_16_0;}
 
-	}
+    state parse_cipher_len_1 {pkt.advance(016); transition parse_compressions;}
+    state parse_cipher_len_2 {pkt.advance(032); transition parse_compressions;}
+    state parse_cipher_len_3 {pkt.advance(048); transition parse_compressions;}
+    state parse_cipher_len_4 {pkt.advance(064); transition parse_compressions;}
+    state parse_cipher_len_5 {pkt.advance(080); transition parse_compressions;}
+    state parse_cipher_len_6 {pkt.advance(096); transition parse_compressions;}
+    state parse_cipher_len_7 {pkt.advance(112); transition parse_compressions;}
 
-	state parse_client_servername_part_32 {
-		pkt.extract(hdr.client_servername_part32);
-		transition accept;
-	}
+    state parse_compressions {
+        bit<8> compressions = pkt.lookahead<bit<8>>();
+        transition select (compressions) {
+            0x01: parse_compressions_len_1;
+            default: unparsed_compression;
+        }
+    }
+    state unparsed_compression {
+        meta.unparsed = COMP_LEN;
+        transition accept;
+    }
+    state parse_compressions_len_1 {
+        pkt.advance(16);
+        transition parse_extensions_len;
+    }
 
-	state parse_client_servername_state2 {
-		pkt.extract(hdr.client_servername);
-		transition select(hdr.client_servername.sni_len[4:3]){
-			0: parse_client_servername_state1;
-			1: parse_client_servername_part_8;
-			3: parse_client_servername_part_8_16;
-			2: parse_client_servername_part_16;
-		}
+    state parse_extensions_len {
+        bit<16> extensions_len = pkt.lookahead<bit<16>>();
+        transition select(extensions_len) {
+            0x0000: accept;
+            default: skip_extensions_len;
+        }
+    }
 
-	}
+    /////////////////////////////////////////////////////////////////////////////
+    //////////////////////////  Extension Parsing Start ////////////////////////
+    ///////////////////////////////////////////////////////////////////////////
 
-	state parse_client_servername_part_8 {
-		pkt.extract(hdr.client_servername_part8);
-		transition accept;
-	}
+    state skip_extensions_len {
+        pkt.advance(16);
+        transition parse_extension;
+    }
 
-	state parse_client_servername_part_8_16 {
-		pkt.extract(hdr.client_servername_part8);
-		pkt.extract(hdr.client_servername_part16);
-		transition accept;
-	}
+    state parse_extension {
+        bit<32> extension = pkt.lookahead<bit<32>>();
+        transition select(extension[31:16]) {
+            0x00: parse_server_name;
+            default: skip_extension;
+        }
+    }
 
-	state parse_client_servername_part_16 {
-		pkt.extract(hdr.client_servername_part16);
-		transition accept;
-	}
+    state unparsed_extension {
+        meta.unparsed = EXT_LIM;
+        transition accept;
+    }
 
-	state parse_client_servername_state1 {
-		pkt.extract(hdr.client_servername);
-		transition select(hdr.client_servername.sni_len[2:0]){
-			0: accept;
-			1: parse_client_servername_part_1;
-			3: parse_client_servername_part_1_2;
-			2: parse_client_servername_part_2;
-			7: parse_client_servername_part_1_2_4;
-			6: parse_client_servername_part_2_4;
-			4: parse_client_servername_part_4;
-		}
 
-	}
+    state skip_extension {
+        bit<32> extension = pkt.lookahead<bit<32>>();
+        transition select(extension[15:0]) {
+            0x00: skip_extension_len_0; 
+            0x01: skip_extension_len_1;
+            0x02: skip_extension_len_2;
+            0x03: skip_extension_len_3;
+            0x04: skip_extension_len_4;
+            0x05: skip_extension_len_5;
+            0x06: skip_extension_len_6;
+            0x07: skip_extension_len_7;
+            0x08: skip_extension_len_8;
+            0x09: skip_extension_len_9;
+            0x0a: skip_extension_len_10;
+            0x0b: skip_extension_len_11;
+            0x0c: skip_extension_len_12;
+            0x0d: skip_extension_len_13;
+            0x0e: skip_extension_len_14;
+            0x0f: skip_extension_len_15;
+            0x10: skip_extension_len_16;
+            0x11: skip_extension_len_17;
+            0x12: skip_extension_len_18;
+            0x13: skip_extension_len_19;
+            0x14: skip_extension_len_20;
+            0x15: skip_extension_len_21;
+            0x16: skip_extension_len_22;
+            0x17: skip_extension_len_23;
+            0x18: skip_extension_len_24;
+            0x19: skip_extension_len_25;
+            0x1a: skip_extension_len_26;
+            0x1b: skip_extension_len_27;
+            0x1c: skip_extension_len_28;
+            0x1d: skip_extension_len_29;
+            0x1e: skip_extension_len_30;
+            0x20: skip_extension_len_31;
+            default: parse_extension_long; 
+        }
+    }
 
-	state parse_client_servername_part_1 {
-		pkt.extract(hdr.client_servername_part1);
-		transition accept;
-	}
+    state skip_extension_len_0 {pkt.advance(32); transition parse_extension; }
+    state skip_extension_len_1 {pkt.advance(40); transition parse_extension; }
+    state skip_extension_len_2 {pkt.advance(48); transition parse_extension; }
+    state skip_extension_len_3 {pkt.advance(56); transition parse_extension; }
+    state skip_extension_len_4 {pkt.advance(64); transition parse_extension; }
+    state skip_extension_len_5 {pkt.advance(72); transition parse_extension; }
+    state skip_extension_len_6 {pkt.advance(80); transition parse_extension; }
+    state skip_extension_len_7 {pkt.advance(88); transition parse_extension; }
+    state skip_extension_len_8 {pkt.advance(96); transition parse_extension; }
+    state skip_extension_len_9 {pkt.advance(104); transition parse_extension;}
 
-	state parse_client_servername_part_1_2 {
-		pkt.extract(hdr.client_servername_part1);
-		pkt.extract(hdr.client_servername_part2);
-		transition accept;
-	}
+    state skip_extension_len_10 {pkt.advance(112); transition parse_extension;}
+    state skip_extension_len_11 {pkt.advance(120); transition parse_extension;}
+    state skip_extension_len_12 {pkt.advance(128); transition parse_extension;}
+    state skip_extension_len_13 {pkt.advance(136); transition parse_extension;}
+    state skip_extension_len_14 {pkt.advance(144); transition parse_extension;}
+    state skip_extension_len_15 {pkt.advance(152); transition parse_extension;}
+    state skip_extension_len_16 {pkt.advance(160); transition parse_extension;}
+    state skip_extension_len_17 {pkt.advance(168); transition parse_extension;}
+    state skip_extension_len_18 {pkt.advance(176); transition parse_extension;}
+    state skip_extension_len_19 {pkt.advance(184); transition parse_extension;}
+    state skip_extension_len_20 {pkt.advance(192); transition parse_extension;}
+    state skip_extension_len_21 {pkt.advance(200); transition parse_extension;}
+    state skip_extension_len_22 {pkt.advance(208); transition parse_extension;}
+    state skip_extension_len_23 {pkt.advance(216); transition parse_extension;}
+    state skip_extension_len_24 {pkt.advance(224); transition parse_extension;}
+    state skip_extension_len_25 {pkt.advance(232); transition parse_extension;}
+    state skip_extension_len_26 {pkt.advance(240); transition parse_extension;}
 
-	state parse_client_servername_part_2 {
-		pkt.extract(hdr.client_servername_part2);
-		transition accept;
-	}
+    state skip_extension_len_27 {pkt.advance(216); transition skip_extension_len_0;}
+    state skip_extension_len_28 {pkt.advance(216); transition skip_extension_len_1;}
+    state skip_extension_len_29 {pkt.advance(216); transition skip_extension_len_2;}
+    state skip_extension_len_30 {pkt.advance(216); transition skip_extension_len_3;}
+    state skip_extension_len_31 {pkt.advance(216); transition skip_extension_len_4;}
+    
+    /////////////////////////////////////////////////////////////////////////////
+    ///////////////////////////  Extension long start //////////////////////////
+    ///////////////////////////////////////////////////////////////////////////
 
-	state parse_client_servername_part_1_2_4 {
-		pkt.extract(hdr.client_servername_part1);
-		pkt.extract(hdr.client_servername_part2);
-		pkt.extract(hdr.client_servername_part4);
-		transition accept;
-	}
+    state parse_extension_long {
+        // transition unparsed_extension;
+        pkt.extract(hdr.extension_long);
+        transition select(hdr.extension_long.len[10:5]) {
+            0x01: skip_extension_long_len_32;
+            0x02: skip_extension_long_len_64;
+            0x03: skip_extension_long_len_96;
+            0x04: skip_extension_long_len_128;
+            0x05: skip_extension_long_len_160;
+            0x06: skip_extension_long_len_192;
+            0x07: skip_extension_long_len_224;
+            0x08: skip_extension_long_len_256;
+            default: unparsed_extension;
+        }
+    }
 
-	state parse_client_servername_part_2_4 {
-		pkt.extract(hdr.client_servername_part2);
-		pkt.extract(hdr.client_servername_part4);
-		transition accept;
-	}
+    state skip_extension_long_stage_2_0 {
+        transition select(hdr.extension_long.len[4:3]) {
+            0x00: skip_extension_long_len_8_0; 
+            0x01: skip_extension_long_len_8;
+            0x02: skip_extension_long_len_16;
+            0x03: skip_extension_long_len_24;
+        }
+    }
 
-	state parse_client_servername_part_4 {
-		pkt.extract(hdr.client_servername_part4);
-		transition accept;
-	}
+    state skip_extension_long_len_8_0 {
+        transition select(hdr.extension_long.len[2:0]) {
+            0x00: parse_extension_stage_2;
+            0x01: skip_extension_long_len_1;
+            0x02: skip_extension_long_len_2;
+            0x03: skip_extension_long_len_3;
+            0x04: skip_extension_long_len_4;
+            0x05: skip_extension_long_len_5;
+            0x06: skip_extension_long_len_6;
+            0x07: skip_extension_long_len_7;
+        }
+    }
+
+    state skip_extension_long_len_1  {pkt.advance(08); transition parse_extension_stage_2; }
+    state skip_extension_long_len_2  {pkt.advance(16); transition parse_extension_stage_2; }
+    state skip_extension_long_len_3  {pkt.advance(24); transition parse_extension_stage_2; }
+    state skip_extension_long_len_4  {pkt.advance(32); transition parse_extension_stage_2; }
+    state skip_extension_long_len_5  {pkt.advance(40); transition parse_extension_stage_2; }
+    state skip_extension_long_len_6  {pkt.advance(48); transition parse_extension_stage_2; }
+    state skip_extension_long_len_7  {pkt.advance(56); transition parse_extension_stage_2; }
+    
+    state skip_extension_long_len_8  {pkt.advance(64); transition skip_extension_long_len_8_0;}
+    state skip_extension_long_len_16 {pkt.advance(128);transition skip_extension_long_len_8_0;}
+    state skip_extension_long_len_24 {pkt.advance(192);transition skip_extension_long_len_8_0;}
+
+    state skip_extension_long_len_32 {pkt.advance(256);transition skip_extension_long_stage_2_0;} 
+    state skip_extension_long_len_64 {pkt.advance(512);transition skip_extension_long_stage_2_0;}
+    state skip_extension_long_len_96 {pkt.advance(768);transition skip_extension_long_stage_2_0;}
+    state skip_extension_long_len_128 {pkt.advance(1024);transition skip_extension_long_stage_2_0;}
+    state skip_extension_long_len_160 {pkt.advance(1280);transition skip_extension_long_stage_2_0;}
+    state skip_extension_long_len_192 {pkt.advance(1536);transition skip_extension_long_stage_2_0;}
+    state skip_extension_long_len_224 {pkt.advance(1792);transition skip_extension_long_stage_2_0;}
+    state skip_extension_long_len_256 {pkt.advance(2048);transition skip_extension_long_stage_2_0;}
+
+    /////////////////////////////////////////////////////////////////////////////
+    ////////////////////////////  Extension long end ///////////////////////////
+    ///////////////////////////////////////////////////////////////////////////
+
+    
+    /////////////////////////////////////////////////////////////////////////////
+    /////////////////////////  Extension stage 2 start /////////////////////////
+    ///////////////////////////////////////////////////////////////////////////
+
+    state parse_extension_stage_2 {
+        // transition unparsed_extension;
+        bit<32> extension = pkt.lookahead<bit<32>>();
+        transition select(extension[31:16]) {
+            0x0000: parse_server_name;
+            default: skip_extension_stage_2;
+        }
+    }
+
+    state skip_extension_stage_2 {
+        bit<32> extension = pkt.lookahead<bit<32>>();
+        transition select(extension[15:0]) {
+            0x00: skip_extension_stage_2_len_0; 
+            0x01: skip_extension_stage_2_len_1;
+            0x02: skip_extension_stage_2_len_2;
+            0x03: skip_extension_stage_2_len_3;
+            0x04: skip_extension_stage_2_len_4;
+            0x05: skip_extension_stage_2_len_5;
+            0x06: skip_extension_stage_2_len_6;
+            0x07: skip_extension_stage_2_len_7;
+            0x08: skip_extension_stage_2_len_8;
+            0x09: skip_extension_stage_2_len_9;
+            0x0a: skip_extension_stage_2_len_10;
+            0x0b: skip_extension_stage_2_len_11;
+            0x0c: skip_extension_stage_2_len_12;
+            0x0d: skip_extension_stage_2_len_13;
+            0x0e: skip_extension_stage_2_len_14;
+            0x0f: skip_extension_stage_2_len_15;
+            0x10: skip_extension_stage_2_len_16;
+            0x11: skip_extension_stage_2_len_17;
+            0x12: skip_extension_stage_2_len_18;
+            0x13: skip_extension_stage_2_len_19;
+            0x14: skip_extension_stage_2_len_20;
+            0x15: skip_extension_stage_2_len_21;
+            0x16: skip_extension_stage_2_len_22;
+            0x17: skip_extension_stage_2_len_23;
+            0x18: skip_extension_stage_2_len_24;
+            0x19: skip_extension_stage_2_len_25;
+            0x1a: skip_extension_stage_2_len_26;
+            0x1b: skip_extension_stage_2_len_27;
+            0x1c: skip_extension_stage_2_len_28;
+            0x1d: skip_extension_stage_2_len_29;
+            0x1e: skip_extension_stage_2_len_30;
+            0x20: skip_extension_stage_2_len_31;
+            // default: parse_extension_long_1; 
+            default: unparsed_extension; 
+        }
+    }
+
+    state skip_extension_stage_2_len_0 {pkt.advance(32); transition parse_extension_stage_2; }
+    state skip_extension_stage_2_len_1 {pkt.advance(40); transition parse_extension_stage_2; }
+    state skip_extension_stage_2_len_2 {pkt.advance(48); transition parse_extension_stage_2; }
+    state skip_extension_stage_2_len_3 {pkt.advance(56); transition parse_extension_stage_2; }
+    state skip_extension_stage_2_len_4 {pkt.advance(64); transition parse_extension_stage_2; }
+    state skip_extension_stage_2_len_5 {pkt.advance(72); transition parse_extension_stage_2; }
+    state skip_extension_stage_2_len_6 {pkt.advance(80); transition parse_extension_stage_2; }
+    state skip_extension_stage_2_len_7 {pkt.advance(88); transition parse_extension_stage_2; }
+    state skip_extension_stage_2_len_8 {pkt.advance(96); transition parse_extension_stage_2; }
+    state skip_extension_stage_2_len_9{pkt.advance(104); transition parse_extension_stage_2; }
+
+    state skip_extension_stage_2_len_10 {pkt.advance(112); transition parse_extension_stage_2;}
+    state skip_extension_stage_2_len_11 {pkt.advance(120); transition parse_extension_stage_2;}
+    state skip_extension_stage_2_len_12 {pkt.advance(128); transition parse_extension_stage_2;}
+    state skip_extension_stage_2_len_13 {pkt.advance(136); transition parse_extension_stage_2;}
+    state skip_extension_stage_2_len_14 {pkt.advance(144); transition parse_extension_stage_2;}
+    state skip_extension_stage_2_len_15 {pkt.advance(152); transition parse_extension_stage_2;}
+    state skip_extension_stage_2_len_16 {pkt.advance(160); transition parse_extension_stage_2;}
+    state skip_extension_stage_2_len_17 {pkt.advance(168); transition parse_extension_stage_2;}
+    state skip_extension_stage_2_len_18 {pkt.advance(176); transition parse_extension_stage_2;}
+    state skip_extension_stage_2_len_19 {pkt.advance(184); transition parse_extension_stage_2;}
+    state skip_extension_stage_2_len_20 {pkt.advance(192); transition parse_extension_stage_2;}
+    state skip_extension_stage_2_len_21 {pkt.advance(200); transition parse_extension_stage_2;}
+    state skip_extension_stage_2_len_22 {pkt.advance(208); transition parse_extension_stage_2;}
+    state skip_extension_stage_2_len_23 {pkt.advance(216); transition parse_extension_stage_2;}
+    state skip_extension_stage_2_len_24 {pkt.advance(224); transition parse_extension_stage_2;}
+    state skip_extension_stage_2_len_25 {pkt.advance(232); transition parse_extension_stage_2;}
+    state skip_extension_stage_2_len_26 {pkt.advance(240); transition parse_extension_stage_2;}
+
+    state skip_extension_stage_2_len_27 {pkt.advance(216); transition skip_extension_stage_2_len_0;}
+    state skip_extension_stage_2_len_28 {pkt.advance(216); transition skip_extension_stage_2_len_1;}
+    state skip_extension_stage_2_len_29 {pkt.advance(216); transition skip_extension_stage_2_len_2;}
+    state skip_extension_stage_2_len_30 {pkt.advance(216); transition skip_extension_stage_2_len_3;}
+    state skip_extension_stage_2_len_31 {pkt.advance(216); transition skip_extension_stage_2_len_4;}
+
+
+    /////////////////////////////////////////////////////////////////////////////
+    //////////////////////////  Extension stage 2 end //////////////////////////
+    ///////////////////////////////////////////////////////////////////////////
+
+    /////////////////////////////////////////////////////////////////////////////
+    /////////////////////////  Extension long 1 start //////////////////////////
+    ///////////////////////////////////////////////////////////////////////////
+
+    state parse_extension_long_1 {
+        pkt.extract(hdr.extension_long_1);
+        transition select(hdr.extension_long_1.len[15:5]) {
+            0x01: skip_extension_long_1_len_32;
+            0x02: skip_extension_long_1_len_64;
+            0x03: skip_extension_long_1_len_96;
+            0x04: skip_extension_long_1_len_128;
+            // 0x05: skip_extension_long_1_len_160;
+            // 0x07: skip_extension_long_1_len_256;
+            default: unparsed_extension;
+        }
+    }
+
+
+    state skip_extension_long_1_len_16_1 {
+        transition select(hdr.extension_long_1.len[4:3]) {
+            0x00: skip_extension_long_1_len_8_0;
+            0x01: skip_extension_long_1_len_8;
+            0x02: skip_extension_long_1_len_16;
+            0x03: skip_extension_long_1_len_24;
+        }
+    }
+
+    state skip_extension_long_1_len_8_0 {
+        transition select(hdr.extension_long_1.len[2:0]) {
+            0x00: parse_extension_stage_2;
+            0x01: skip_extension_long_1_len_1;
+            0x02: skip_extension_long_1_len_2;
+            0x03: skip_extension_long_1_len_3;
+            0x04: skip_extension_long_1_len_4;
+            0x05: skip_extension_long_1_len_5;
+            0x06: skip_extension_long_1_len_6;
+            0x07: skip_extension_long_1_len_7;
+        }
+    }
+
+    state skip_extension_long_1_len_1  {pkt.advance(08); transition parse_extension_stage_2; }
+    state skip_extension_long_1_len_2  {pkt.advance(16); transition parse_extension_stage_2; }
+    state skip_extension_long_1_len_3  {pkt.advance(24); transition parse_extension_stage_2; }
+    state skip_extension_long_1_len_4  {pkt.advance(32); transition parse_extension_stage_2; }
+    state skip_extension_long_1_len_5  {pkt.advance(40); transition parse_extension_stage_2; }
+    state skip_extension_long_1_len_6  {pkt.advance(48); transition parse_extension_stage_2; }
+    state skip_extension_long_1_len_7  {pkt.advance(56); transition parse_extension_stage_2; }
+
+
+    state skip_extension_long_1_len_8  {pkt.advance(64); transition skip_extension_long_1_len_8_0;}
+    state skip_extension_long_1_len_16 {pkt.advance(128);transition skip_extension_long_1_len_8_0;}
+    state skip_extension_long_1_len_24 {pkt.advance(192);transition skip_extension_long_1_len_8_0;}
+
+    state skip_extension_long_1_len_32 {pkt.advance(256);transition skip_extension_long_1_len_16_1;} 
+    state skip_extension_long_1_len_64 {pkt.advance(512);transition skip_extension_long_1_len_16_1;}
+    state skip_extension_long_1_len_96 {pkt.advance(768);transition skip_extension_long_1_len_16_1;}
+    state skip_extension_long_1_len_128 {pkt.advance(1024);transition skip_extension_long_1_len_16_1;}
+    state skip_extension_long_1_len_160 {pkt.advance(1280);transition skip_extension_long_1_len_16_1;}
+
+    state skip_extension_long_1_len_256 {pkt.advance(2048);transition skip_extension_long_1_len_16_1;}
+
+
+    /////////////////////////////////////////////////////////////////////////////
+    //////////////////////////  Extension long 1 end ///////////////////////////
+    ///////////////////////////////////////////////////////////////////////////
+    
+
+    state parse_server_name {
+        // pkt.extract(hdr.extension);
+        pkt.advance(32);
+        pkt.extract(hdr.client_servername); 
+        transition select(hdr.client_servername.sni_len[15:5]) {
+            0x00: parse_server_name_;
+            0x01: parse_server_name_1;
+            default: unparsed_sni;
+        }
+    }
+    state unparsed_sni {
+        meta.unparsed = SNI_LEN;
+        transition accept;
+    }
+
+    state parse_server_name_ { 
+        transition select(hdr.client_servername.sni_len[4:3]) {
+            0x00: skip_part_16_8;
+            0x01: extract_part_8;
+            0x02: extract_part_16;
+            0x03: extract_part_16_8;
+        }
+    }
+
+    state parse_server_name_1{ 
+        pkt.extract(hdr.servername_part32);
+        transition parse_server_name_;
+    }
+
+    state skip_part_16_8 { 
+        transition select(hdr.client_servername.sni_len[2:0]) {
+            0x00: accept;
+            0x01: extract_part_1;
+            0x02: extract_part_2;
+            0x03: extract_part_1_2;
+            0x04: extract_part_4;
+            0x05: extract_part_1_4;
+            0x06: extract_part_2_4;
+            0x07: extract_part_1_2_4;
+        }
+    }
+
+    state extract_part_8 {
+        pkt.extract(hdr.servername_part8);
+        transition skip_part_16_8;
+    }
+
+    state extract_part_16 {
+        pkt.extract(hdr.servername_part16);
+        transition skip_part_16_8;
+    }
+
+    state extract_part_16_8 {
+        pkt.extract(hdr.servername_part16);
+        pkt.extract(hdr.servername_part8);
+        transition skip_part_16_8;
+    }
+
+    state extract_part_1 {
+        pkt.extract(hdr.servername_part1);
+        transition accept;
+    }
+    state extract_part_2 {
+        pkt.extract(hdr.servername_part2);
+        transition accept;
+    }
+    state extract_part_1_2 {
+        pkt.extract(hdr.servername_part2);
+        pkt.extract(hdr.servername_part1);
+        transition accept;
+    }
+    state extract_part_4 {
+        pkt.extract(hdr.servername_part4);
+        transition accept;
+    }
+    state extract_part_1_4 {
+        pkt.extract(hdr.servername_part4);
+        pkt.extract(hdr.servername_part1);
+        transition accept;
+    }
+    state extract_part_2_4 {
+        pkt.extract(hdr.servername_part4);
+        pkt.extract(hdr.servername_part2);
+        transition accept;
+    }
+    state extract_part_1_2_4 {
+        pkt.extract(hdr.servername_part4);
+        pkt.extract(hdr.servername_part2);
+        pkt.extract(hdr.servername_part1);
+        transition accept;
+    }
 
 }
