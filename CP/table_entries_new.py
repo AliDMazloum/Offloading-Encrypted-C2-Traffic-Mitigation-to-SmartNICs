@@ -158,7 +158,7 @@ voting_table.add_with_set_final_class(class0=2, class1=2, class2=2, class3=2, cl
 
 bfrt.mirror.cfg.entry_with_normal(sid=27,direction='BOTH',session_enable=True,ucast_egress_port=140,ucast_egress_port_valid=1,max_pkt_len=16384).push()
 
-bfrt.mirror.cfg.entry_with_normal(sid=28,direction='BOTH',session_enable=True,ucast_egress_port=148,ucast_egress_port_valid=1,max_pkt_len=16384).push()
+bfrt.mirror.cfg.entry_with_normal(sid=28,direction='BOTH',session_enable=True,ucast_egress_port=156,ucast_egress_port_valid=1,max_pkt_len=16384).push()
 
 
 command_init = ['cd /root/bf-sde-9.6.0/ ; ./run_bfshell.sh --no-status-srv -f /home/C2_TLS/ucli_cmds'] 
@@ -170,7 +170,10 @@ def del_ports(port_list, file):
 
 def add_ports(port_list, file):
     for port_number in port_list:
-        cmd = "pm port-add "+ str(port_number) + "/- 40G NONE \n"
+        if(port_number == 3):
+            cmd = "pm port-add "+ str(port_number) + "/- 100G RS \n"
+        else:
+            cmd = "pm port-add "+ str(port_number) + "/- 100G NONE \n"
         file.write(cmd)
 
 def enb_ports(port_list, file):
@@ -182,22 +185,20 @@ def enb_ports(port_list, file):
 def get_port_lsit(output):
     port_list = []
     lines = output.strip().split('\n')
+    lines = lines[1:]
     for line in lines:
-        items = line.strip().split()
-        if(len(items) > 3):
-            try:
-                if(int(items[0][0]) == 1):
-                    status = items[3].strip().split("|")
-                    if ("DWN" in status):
-                        port_number = int(items[0][0])
-                        port_list.append(port_number)
-                else:
-                    status = items[2].strip().split("|")
-                    if ("DWN" in status):
-                        port_number = int(items[0][0])
-                        port_list.append(port_number)
-            except Exception as e:
-                pass
+        items = line.strip().split("|")
+        try:
+            status = items[10]
+            if ("DWN" in status):
+                port_number = int(items[0][0])
+                port_list.append(port_number)
+        except Exception as e:
+            pass
+            # print(line)
+            # print("error occured while retreiving the status of a port: ",e)
+
+
     return port_list
 
 def check_ports(file):
