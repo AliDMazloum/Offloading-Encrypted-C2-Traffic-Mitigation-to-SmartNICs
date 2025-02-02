@@ -99,5 +99,5 @@ while True:
             server_hello_exts_number+ ", " +tls_version+ ", " + flow_packet_class
 
             with open(filename_out, "a") as text_file:
-                    text_file.write(flow_packet_class)
+                    text_file.write(Actual_class +" " +flow_packet_class)
                     text_file.write("\n")
