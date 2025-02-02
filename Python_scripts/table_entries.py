@@ -76,13 +76,13 @@ table_feature2.add_with_SetCode2(feature2_start=112, feature2_end=113, code0=0b0
 table_feature2.add_with_SetCode2(feature2_start=114, feature2_end=116, code0=0b0, code2=0b111, code3=0b1, code4=0b11)
 table_feature2.add_with_SetCode2(feature2_start=117, feature2_end=65535, code0=0b1, code2=0b111, code3=0b1, code4=0b11)
 
-table_feature3.add_with_SetCode3(feature3_start=0, feature3_end=1, code0=0b00, code1=0b00, code2=0b0, code4=0b0)
+table_feature3.add_with_SetCode3(feature3_start=0, feature3_end=1, code0=0b00, code1=0b00, code2=0b0,  code4=0b0)
 table_feature3.add_with_SetCode3(feature3_start=2, feature3_end=4, code0=0b00, code1=0b10, code2=0b0, code4=0b0)
 table_feature3.add_with_SetCode3(feature3_start=5, feature3_end=5, code0=0b10, code1=0b11, code2=0b1, code4=0b1)
 table_feature3.add_with_SetCode3(feature3_start=6, feature3_end=65535, code0=0b11, code1=0b11, code2=0b1, code4=0b1)
 
 table_feature4.add_with_SetCode4(feature4_start=0, feature4_end=2, code0=0b0, code1=0b00, code2=0b00, code4=0b0)
-table_feature4.add_with_SetCode4(feature4_start=3, feature4_end=65535, code0=0b1, code1=0b11, code2=0b11, code4=0b1)
+table_feature4.add_with_SetCode4(feature4_start=3, feature4_end=65535, code0=0b1, code1=0b11, code2=0b11,  code4=0b1)
 
 print("******************* ENTERED FEATURE TABLE RULES *****************")
 

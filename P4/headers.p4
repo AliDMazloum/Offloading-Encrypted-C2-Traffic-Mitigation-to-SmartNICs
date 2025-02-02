@@ -313,9 +313,9 @@ struct my_egress_metadata_t {
     
     bit<8> final_class;
 
-    bit<8> codeword0;
-    bit<12> codeword1;
-    bit<9> codeword2;
+    bit<10> codeword0;
+    bit<11> codeword1;
+    bit<12> codeword2;
     bit<8> codeword3;
-    bit<9> codeword4;
+    bit<13> codeword4;
 }

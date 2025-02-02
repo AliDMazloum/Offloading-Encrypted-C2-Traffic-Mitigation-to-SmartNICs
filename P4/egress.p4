@@ -35,59 +35,59 @@ control Egress(
     action nop(){}
 
     /* Feature table actions */
-    action SetCode0(bit<3> code0, bit<5> code1, bit<3> code2, bit<3> code3, bit<3> code4) {
-        meta.codeword0[7:5] = code0;
-        meta.codeword1[11:7] = code1;
+    action SetCode0(bit<3> code0, bit<5> code1, bit<3> code2, bit<4> code3, bit<5> code4) {
+        meta.codeword0[9:7] = code0;
+        meta.codeword1[10:6] = code1;
+        meta.codeword2[11:9] = code2;
+        meta.codeword3[7:4] = code3;
+        meta.codeword4[12:8] = code4;
+    }
+    action SetCode1(bit<3> code0, bit<2> code1, bit<3> code2, bit<3> code3, bit<4> code4)  {
+        meta.codeword0[6:4] = code0;
+        meta.codeword1[5:4] = code1;
         meta.codeword2[8:6] = code2;
-        meta.codeword3[7:5] = code3;
-        meta.codeword4[8:6] = code4;
+        meta.codeword3[3:1] = code3;
+        meta.codeword4[7:4] = code4;
     }
-    action SetCode1(bit<2> code0, bit<2> code1, bit<2> code2, bit<3> code3, bit<3> code4)  {
-        meta.codeword0[4:3] = code0;
-        meta.codeword1[6:5] = code1;
-        meta.codeword2[5:4] = code2;
-        meta.codeword3[4:2] = code3;
-        meta.codeword4[5:3] = code4;
+    action SetCode2(bit<1> code0, bit<3> code2, bit<1> code3, bit<2> code4)  {
+        meta.codeword0[3:3] = code0;
+        // meta.codeword1[4:4] = code1;
+        meta.codeword2[5:3] = code2;
+        meta.codeword3[0:0] = code3;
+        meta.codeword4[3:2] = code4;
     }
-    action SetCode2(bit<2> code0, bit<1> code1, bit<2> code2, bit<1> code3, bit<2> code4)  {
-        meta.codeword0[2:1] = code0;
-        meta.codeword1[4:4] = code1;
-        meta.codeword2[3:2] = code2;
-        meta.codeword3[1:1] = code3;
-        meta.codeword4[2:1] = code4;
-    }
-    action SetCode3( bit<3> code1, bit<1> code2, bit<1> code4)  { //gere
-        // meta.codeword0[100:2]  = code0;
-        meta.codeword1[3:1]  = code1;
-        meta.codeword2[1:1]  = code2;
+    action SetCode3( bit<2> code0, bit<2> code1, bit<1> code2, bit<1> code4)  { //gere
+        meta.codeword0[2:1]  = code0;
+        meta.codeword1[3:2]  = code1;
+        meta.codeword2[2:2]  = code2;
         // meta.codeword3[127:3]  = code3;
-        meta.codeword4[0:0]  = code4;
+        meta.codeword4[1:1]  = code4;
     }
-    action SetCode4(bit<1> code0, bit<1> code1, bit<1> code2, bit<1> code3) {
+    action SetCode4(bit<1> code0, bit<2> code1, bit<2> code2, bit<1> code4) {
         meta.codeword0[0:0]  = code0;
-        meta.codeword1[0:0]  = code1;
-        meta.codeword2[0:0]  = code2;
-        meta.codeword3[0:0]  = code3;
-        // meta.codeword4[0:0]  = code4;
+        meta.codeword1[1:0]  = code1;
+        meta.codeword2[1:0]  = code2;
+        // meta.codeword3[0:0]  = code3;
+        meta.codeword4[0:0]  = code4;
     }
 
     /* Feature tables */
     table table_feature0{
 	    key = {hdr.features.client_hello_len: range @name("feature0");}
 	    actions = {@defaultonly nop; SetCode0;}
-	    size = 9;
+	    size = 20;
         const default_action = nop();
 	}
     table table_feature1{
         key = {hdr.features.client_hello_exts_number: range @name("feature1");}
 	    actions = {@defaultonly nop; SetCode1;}
-	    size = 4;
+	    size = 7;
         const default_action = nop();
 	}
 	table table_feature2{
         key = {hdr.features.server_hello_len: range @name("feature2");} 
 	    actions = {@defaultonly nop; SetCode2;}
-	    size = 5;
+	    size = 7;
         const default_action = nop();
 	}
     table table_feature3{
@@ -107,7 +107,7 @@ control Egress(
 	table code_table0{
 	    key = {meta.codeword0: ternary;}
 	    actions = {@defaultonly nop; SetClass0;}
-	    size = 9;
+	    size = 12;
         const default_action = nop();
 	}
 	table code_table1{
@@ -119,7 +119,7 @@ control Egress(
 	table code_table2{
         key = {meta.codeword2: ternary;}
 	    actions = {@defaultonly nop; SetClass2;}
-	    size = 10;
+	    size = 13;
         const default_action = nop();
 	}
 	table code_table3{
@@ -131,7 +131,7 @@ control Egress(
 	table code_table4{
         key = {meta.codeword4: ternary;}
 	    actions = {@defaultonly nop; SetClass4;}
-	    size = 10;
+	    size = 15;
         const default_action = nop();
 	}
 
