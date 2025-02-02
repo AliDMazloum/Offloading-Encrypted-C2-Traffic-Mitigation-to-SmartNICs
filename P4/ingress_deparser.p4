@@ -9,7 +9,8 @@ control IngressDeparser(packet_out pkt,
 {
 
     Digest<flow_class_digest>() digest_flow_class;
-    Digest<client_hello_digest>() digest_client_hellow;
+    Digest<client_hello_digest>() digest_client_hello;
+    Digest<processing_time_digest>() digest_proc_time;
     Mirror() mirror;
 
     apply {
@@ -21,8 +22,10 @@ control IngressDeparser(packet_out pkt,
             hdr.features.server_hello_len, hdr.features.server_hello_exts_number, hdr.features.tls_version, meta.final_class});
         }
         else if(ig_dprsr_md.digest_type == 2) {
-            digest_client_hellow.pack({meta.flow_ID, hdr.ipv4.src_addr, hdr.ipv4.dst_addr, hdr.tcp_ports.src_port,
+            digest_client_hello.pack({meta.flow_ID, hdr.ipv4.src_addr, hdr.ipv4.dst_addr, hdr.tcp_ports.src_port,
             hdr.tcp_ports.dst_port, hdr.client_hello_dpdk.len, hdr.client_hello_dpdk.exts_num});
+        }else if(ig_dprsr_md.digest_type == 3) {
+            digest_proc_time.pack({meta.flow_ID, meta.DPDK_proc_time, meta.frwd_proc_time});
         }
         if (ig_dprsr_md.mirror_type == 1) {
             mirror.emit<mirror_h>(meta.ing_mir_ses, {meta.pkt_type});
