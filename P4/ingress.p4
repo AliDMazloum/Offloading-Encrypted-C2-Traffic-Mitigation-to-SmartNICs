@@ -186,7 +186,12 @@ control Ingress(
     RegisterAction<bit<32>,bit<(INDEX_WIDTH)>,bit<32>>(server_hello_first_obs)
     set_DPDK_proc_time = {
         void apply(inout bit<32> timestamp) {
-            timestamp = TIMESTAMP - timestamp;
+            if(timestamp < TIMESTAMP){
+                timestamp = TIMESTAMP - timestamp;
+            }
+            else{
+                timestamp = 0;
+            }
         }
     };
     /* Get DPDK processing time */
@@ -210,7 +215,12 @@ control Ingress(
     RegisterAction<bit<32>,bit<(INDEX_WIDTH)>,bit<32>>(server_hello_second_obs)
     calc_frwd_proc_time = {
         void apply(inout bit<32> timestamp, out bit<32> output) {
-            output = TIMESTAMP - timestamp;
+            if(timestamp < TIMESTAMP){
+                output = TIMESTAMP - timestamp;
+            }
+            else{
+                output = 0;
+            }
             timestamp = 0;
         }
     };
