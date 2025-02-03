@@ -199,6 +199,7 @@ control Ingress(
     get_DPDK_proc_time = {
         void apply(inout bit<32> timestamp, out bit<32> output) {
             output = timestamp;
+            timestamp = 0;
         }
     };
 
