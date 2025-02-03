@@ -186,7 +186,7 @@ control Ingress(
     RegisterAction<bit<32>,bit<(INDEX_WIDTH)>,bit<32>>(server_hello_first_obs)
     set_DPDK_proc_time = {
         void apply(inout bit<32> timestamp) {
-            if(timestamp < TIMESTAMP){
+            if(timestamp < TIMESTAMP && timestamp > 0){
                 timestamp = TIMESTAMP - timestamp;
             }
             else{
@@ -215,7 +215,7 @@ control Ingress(
     RegisterAction<bit<32>,bit<(INDEX_WIDTH)>,bit<32>>(server_hello_second_obs)
     calc_frwd_proc_time = {
         void apply(inout bit<32> timestamp, out bit<32> output) {
-            if(timestamp < TIMESTAMP){
+            if(timestamp < TIMESTAMP && timestamp > 0){
                 output = TIMESTAMP - timestamp;
             }
             else{
