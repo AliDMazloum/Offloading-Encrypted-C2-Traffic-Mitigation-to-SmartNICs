@@ -117,6 +117,7 @@ control Ingress(
         counters = domain_stats;
     }
 
+    /*---------------------------------------Start  Register Defenisions ------------------------------------*/
     /* Register for Client extentions number per flow */
     Register<bit<8>,bit<(INDEX_WIDTH)>>(MAX_REGISTER_ENTRIES) flow_client_exts_num;
     /* Register set action */
@@ -153,6 +154,111 @@ control Ingress(
         }
     };
 
+    // /* Register for Server Hello First Observation Timestamp */
+    // Register<bit<32>,bit<(INDEX_WIDTH)>>(MAX_REGISTER_ENTRIES) server_hello_first_obs;
+    // /* Register set action */
+    // RegisterAction<bit<32>,bit<(INDEX_WIDTH)>,bit<32>>(server_hello_first_obs)
+    // set_server_hello_first_obsm = {
+    //     void apply(inout bit<32> timestamp) {
+    //         exts_num = hdr.client_hello_dpdk.exts_num[7:0];
+    //     }
+    // };
+    // /* Register read action */
+    // RegisterAction<bit<32>,bit<(INDEX_WIDTH)>,bit<32>>(server_hello_first_obs)
+    // get_server_hello_first_obs = {
+    //     void apply(inout bit<32> exts_num, out bit<32> output) {
+    //         output = exts_num;
+    //         exts_num = 0;
+    //     }
+    // };
+
+    #define TIMESTAMP ig_intr_md.ingress_mac_tstamp[31:0]
+    /* Register for Server Hello First Observation Timestamp */
+    Register<bit<32>,bit<(INDEX_WIDTH)>>(MAX_REGISTER_ENTRIES) server_hello_first_obs;
+    /* Register initial observation timestamp*/
+    RegisterAction<bit<32>,bit<(INDEX_WIDTH)>,bit<32>>(server_hello_first_obs)
+    set_server_hello_first_obs = {
+        void apply(inout bit<32> timestamp) {
+            timestamp = TIMESTAMP;
+        }
+    };
+    /* Calculate DPDK processing time */
+    RegisterAction<bit<32>,bit<(INDEX_WIDTH)>,bit<32>>(server_hello_first_obs)
+    set_DPDK_proc_time = {
+        void apply(inout bit<32> timestamp) {
+            timestamp = TIMESTAMP - timestamp;
+        }
+    };
+    /* Get DPDK processing time */
+    RegisterAction<bit<32>,bit<(INDEX_WIDTH)>,bit<32>>(server_hello_first_obs)
+    get_DPDK_proc_time = {
+        void apply(inout bit<32> timestamp, out bit<32> output) {
+            output = timestamp;
+        }
+    };
+
+    /* Register for Server Hello Second Observation Timestamp */
+    Register<bit<32>,bit<(INDEX_WIDTH)>>(MAX_REGISTER_ENTRIES) server_hello_second_obs;
+    /* Register Second observation timestamp*/
+    RegisterAction<bit<32>,bit<(INDEX_WIDTH)>,bit<32>>(server_hello_second_obs)
+    set_server_hello_second_obs = {
+        void apply(inout bit<32> timestamp) {
+            timestamp = TIMESTAMP;
+        }
+    };
+    /* Calculate forwarding action processing time */
+    RegisterAction<bit<32>,bit<(INDEX_WIDTH)>,bit<32>>(server_hello_second_obs)
+    calc_frwd_proc_time = {
+        void apply(inout bit<32> timestamp, out bit<32> output) {
+            output = TIMESTAMP - timestamp;
+            timestamp = 0;
+        }
+    };
+
+    
+
+    // /* Register for Server Hello Second Observation Timestamp */
+    // Register<bit<32>,bit<(INDEX_WIDTH)>>(MAX_REGISTER_ENTRIES) server_hello_second_obs;
+    // /* Register set action */
+    // RegisterAction<bit<32>,bit<(INDEX_WIDTH)>,bit<32>>(server_hello_second_obs)
+    // set_server_hello_second_obs = {
+    //     void apply(inout bit<32> timestamp) {
+    //         timestamp = TIMESTAMP;
+    //     }
+    // };
+    // /* Register read action */
+    // RegisterAction<bit<32>,bit<(INDEX_WIDTH)>,bit<32>>(server_hello_second_obs)
+    // get_server_hello_second_obs = {
+    //     void apply(inout bit<32> timestamp, out bit<32> output) {
+    //         output = timestamp;
+    //         timestamp = 0;
+    //     }
+    // };
+
+    // /* Register for Server Hello third Observation Timestamp */
+    // Register<bit<32>,bit<(INDEX_WIDTH)>>(MAX_REGISTER_ENTRIES) server_hello_third_obs;
+    // /* Register set action */
+    // RegisterAction<bit<32>,bit<(INDEX_WIDTH)>,bit<32>>(server_hello_third_obs)
+    // set_server_hello_third_obs = {
+    //     void apply(inout bit<32> timestamp) {
+    //         timestamp = TIMESTAMP;
+    //     }
+    // };
+    // /* Register read action */
+    // RegisterAction<bit<32>,bit<(INDEX_WIDTH)>,bit<32>>(server_hello_third_obs)
+    // get_server_hello_third_obs = {
+    //     void apply(inout bit<32> timestamp, out bit<32> output) {
+    //         output = TIMESTAMP - timestamp;
+    //         timestamp = 0;
+    //     }
+    // };
+
+    /*---------------------------------------End Register Defenisions ------------------------------------*/
+
+
+
+    /*---------------------------------------start Hash Defenisions ------------------------------------*/
+
     /* Declaration of the hashes*/
     Hash<bit<(INDEX_WIDTH)>>(HashAlgorithm_t.CRC16)     flow_id_calc;
     Hash<bit<(INDEX_WIDTH)>>(HashAlgorithm_t.CRC16)     rev_flow_id_calc;
@@ -173,6 +279,8 @@ control Ingress(
         hdr.ethernet.ether_type = TYPE_RECIRC;
     }
 
+    /*---------------------------------------End Hash Defenisions ------------------------------------*/
+
     apply {
         if(hdr.dpdk.isValid()){ //Coming from the NIC
             if(hdr.client_hello_dpdk.isValid()){
@@ -186,6 +294,8 @@ control Ingress(
             else if(hdr.server_hello_dpdk.isValid()){
                 get_rev_flow_ID();
                 meta.rev_flow_ID = meta.rev_flow_ID >>1;
+                set_DPDK_proc_time.execute(meta.rev_flow_ID);
+                set_server_hello_second_obs.execute(meta.rev_flow_ID);
                 hdr.client_hello_dpdk.setValid();
                 hdr.client_hello_dpdk.exts_num =  (bit<16>)get_flow_client_exts_num.execute(meta.rev_flow_ID);
                 hdr.client_hello_dpdk.len = get_flow_client_hello_len.execute(meta.rev_flow_ID);
@@ -228,6 +338,9 @@ control Ingress(
             // drop();
         }
         else if(hdr.tls_server_hello.isValid()){
+            get_rev_flow_ID();
+            meta.rev_flow_ID = meta.rev_flow_ID >>1;
+            set_server_hello_first_obs.execute(meta.rev_flow_ID);
             ig_dprsr_md.mirror_type = 1;
             meta.pkt_type = 22;
             meta.ing_mir_ses = 28;
@@ -238,9 +351,12 @@ control Ingress(
             get_rev_flow_ID();
             meta.flow_ID =  meta.flow_ID >> 1;
             meta.rev_flow_ID = meta.rev_flow_ID >>1;
+            meta.frwd_proc_time = calc_frwd_proc_time.execute(meta.rev_flow_ID);
+            meta.DPDK_proc_time = get_DPDK_proc_time.execute(meta.rev_flow_ID);
+            ig_dprsr_md.digest_type = 3;
             hdr.ethernet.ether_type = ETHERTYPE_IPV4;
             meta.final_class = hdr.recirc.class_result;
-            ig_dprsr_md.digest_type = 1;
+            // ig_dprsr_md.digest_type = 1; //Digest to report classification result
             if(hdr.recirc.class_result == 1){
                 hdr.recirc.setInvalid();
                 hdr.features.setInvalid();
@@ -251,9 +367,5 @@ control Ingress(
             }
             // ig_tm_md.ucast_egress_port = 140;
         }
-        
-        // if(ig_intr_md.ingress_port == 132){
-        //     ig_tm_md.ucast_egress_port = 148;
-        // }
     }
 }

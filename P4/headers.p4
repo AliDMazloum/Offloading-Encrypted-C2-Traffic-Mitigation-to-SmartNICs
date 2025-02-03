@@ -220,7 +220,7 @@ struct flow_class_digest {  // maximum size allowed is 47 bytes
     bit<8> class_value;
 }
 
-struct client_hello_digest {  // maximum size allowed is 47 bytes
+struct client_hello_digest { 
     bit<INDEX_WIDTH> flow_ID;
     bit<32> src_addr;
     bit<32> dst_addr;
@@ -228,6 +228,12 @@ struct client_hello_digest {  // maximum size allowed is 47 bytes
     bit<16> dst_port;
     bit<16> client_hello_len;
     bit<16> client_hello_exts_number;
+}
+
+struct processing_time_digest {
+    bit<INDEX_WIDTH> flow_ID;
+    bit<32> DPDK_proc_time;
+    bit<32> frwd_proc_time;
 }
 
 /***********************  I N G R E S S  H E A D E R S  ************************/
@@ -281,6 +287,8 @@ struct my_ingress_metadata_t {
     bit<INDEX_WIDTH> rev_flow_ID;
     bit<8> final_class;
     bit<8> unparsed;
+    bit<32> DPDK_proc_time;
+    bit<32> frwd_proc_time;
     MirrorId_t ing_mir_ses;   // Ingress mirror session ID
     pkt_type_t pkt_type;
 }
