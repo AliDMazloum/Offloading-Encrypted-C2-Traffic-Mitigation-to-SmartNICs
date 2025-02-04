@@ -608,61 +608,61 @@ lcore_main(void *mbuf_pool)
                                             uint16_t ext_type = rte_cpu_to_be_16(pTlsExtHdr->type);
                                             uint16_t ext_len = rte_cpu_to_be_16(pTlsExtHdr->len);
                                             tlsdata_offset += sizeof(struct rte_tls_ext_hdr);
-                                            if (ext_type == 0)
-                                            {
-                                                if (ext_len == 0)
-                                                {
-                                                    break;
-                                                }
-                                                uint32_t name_offset = tlsdata_offset + sizeof(struct rte_ctls_ext_sni_hdr);
+                                            // if (ext_type == 0)
+                                            // {
+                                            //     if (ext_len == 0)
+                                            //     {
+                                            //         break;
+                                            //     }
+                                            //     uint32_t name_offset = tlsdata_offset + sizeof(struct rte_ctls_ext_sni_hdr);
 
-                                                char *server_name = rte_pktmbuf_mtod_offset(bufs[i], char *, name_offset);
-                                                int server_name_len = strlen(server_name);
-                                                // rte_memcpy(dest_buf, server_name, server_name_len + 1);
+                                            //     char *server_name = rte_pktmbuf_mtod_offset(bufs[i], char *, name_offset);
+                                            //     int server_name_len = strlen(server_name);
+                                            //     // rte_memcpy(dest_buf, server_name, server_name_len + 1);
 
-                                                if (ops[0]->mbuf)
-                                                {
+                                            //     if (ops[0]->mbuf)
+                                            //     {
 
-                                                    rte_pktmbuf_attach_extbuf(ops[0]->mbuf,
-                                                                              server_name, 0, server_name_len, &shinfo);
+                                            //         rte_pktmbuf_attach_extbuf(ops[0]->mbuf,
+                                            //                                   server_name, 0, server_name_len, &shinfo);
 
-                                                    ops[0]->mbuf->data_len = server_name_len;
-                                                    ops[0]->mbuf->pkt_len = server_name_len;
-                                                }
+                                            //         ops[0]->mbuf->data_len = server_name_len;
+                                            //         ops[0]->mbuf->pkt_len = server_name_len;
+                                            //     }
                                              
-                                                else
-                                                {
-                                                    printf("There is no space for ops[0]->mbuf");
-                                                }
-                                                ops[0]->user_id = i;
-                                                ops[0]->group_id0 = 1;
-                                                ops[0]->req_flags |= RTE_REGEX_OPS_REQ_STOP_ON_MATCH_F;
+                                            //     else
+                                            //     {
+                                            //         printf("There is no space for ops[0]->mbuf");
+                                            //     }
+                                            //     ops[0]->user_id = i;
+                                            //     ops[0]->group_id0 = 1;
+                                            //     ops[0]->req_flags |= RTE_REGEX_OPS_REQ_STOP_ON_MATCH_F;
 
-                                                uint32_t nb_enqueue =  rte_regexdev_enqueue_burst(0,
-                                                                           0,
-                                                                           ops,
-                                                                           1);
+                                            //     uint32_t nb_enqueue =  rte_regexdev_enqueue_burst(0,
+                                            //                                0,
+                                            //                                ops,
+                                            //                                1);
 
-                                                uint32_t nb_dequeue = 0;
-                                                while(nb_enqueue != nb_dequeue){
-                                                    nb_dequeue = rte_regexdev_dequeue_burst(0,
-                                                                           0,
-                                                                           ops,
-                                                                           1);
-                                                                           }
+                                            //     uint32_t nb_dequeue = 0;
+                                            //     while(nb_enqueue != nb_dequeue){
+                                            //         nb_dequeue = rte_regexdev_dequeue_burst(0,
+                                            //                                0,
+                                            //                                ops,
+                                            //                                1);
+                                            //                                }
 
-                                                nb_matches = ops[0]->nb_matches;
-                                                if (nb_matches > 0)
-                                                {
-                                                    // nb_rx--;
-                                                    // rte_pktmbuf_free(bufs[i]);
-                                                    // printf("Packet Blacklisted. Ethernet type is %u \n",ethernet_type);
-                                                    blacklisted = true;
-                                                    client_hello_dpdk->exts_num = rte_cpu_to_be_16(240);
+                                            //     nb_matches = ops[0]->nb_matches;
+                                            //     if (nb_matches > 0)
+                                            //     {
+                                            //         // nb_rx--;
+                                            //         // rte_pktmbuf_free(bufs[i]);
+                                            //         // printf("Packet Blacklisted. Ethernet type is %u \n",ethernet_type);
+                                            //         blacklisted = true;
+                                            //         client_hello_dpdk->exts_num = rte_cpu_to_be_16(240);
 
-                                                }
+                                            //     }
                                                 
-                                            }
+                                            // }
                                             // break;
                                             tlsdata_offset += ext_len;
                                             exts_len -= ext_len;

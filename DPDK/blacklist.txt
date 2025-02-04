@@ -1,4 +1,4 @@
-0, /([a-z]|[A-Z]|[0-9])+xuuwkuzg([a-z]|[A-Z]|[0-9])+lsseruriv/
-#1, /.*cloudflare.*/
-2, /.*cloud.*/
-1, /.*wikipedia.*/
+#0, /([a-z]|[A-Z]|[0-9])+xuuwkuzg([a-z]|[A-Z]|[0-9])+lsseruriv/
+1, /.*cloudflare.*/
+#2, /.*cloud.*/
+#1, /.*wikipedia.*/
