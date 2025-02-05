@@ -183,13 +183,10 @@ control Egress(
         if(hdr.mirror_md.isValid()){
             if(hdr.mirror_md.mirror_type == 11){
                 hdr.ethernet.ether_type = 2000;
-                hdr.client_hello_dpdk.setValid();
             }
             else if(hdr.mirror_md.mirror_type == 22){
                 hdr.ethernet.ether_type = 2001;
-                hdr.server_hello_dpdk.setValid();
             }
-            hdr.dpdk.setValid();
             hdr.mirror_md.setInvalid();
         }
     }

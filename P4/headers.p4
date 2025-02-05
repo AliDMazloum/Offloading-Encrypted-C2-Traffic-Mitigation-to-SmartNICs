@@ -60,21 +60,6 @@ header ethernet_h {
     bit<16>   ether_type;
 }
 
-header dpdk_h {
-    bit<8> type;
-}
-
-header client_hello_dpdk_h {
-    bit<16> len;
-    bit<16> exts_num;
-}
-
-header server_hello_dpdk_h {
-    bit<16> len;
-    bit<16> exts_num;
-    bit<16> version;
-}
-
 header ipv4_h {
     bit<4>   version;
     bit<4>   ihl;
@@ -166,24 +151,6 @@ header ctls_ext_sni_h {
     bit<8> type;
     bit<16> sni_len;
 }
-header hostname_part1 {
-    bit<8> part;
-}
-header hostname_part2 {
-    bit<16> part;
-}
-header hostname_part4 {
-    bit<32> part;
-}
-header hostname_part8 {
-    bit<64> part;
-}
-header hostname_part16 {
-    bit<128> part;
-}
-header hostname_part32 {
-    bit<256> part;
-}
 
 header tls_continue_h { 
     bit<16> id;
@@ -205,45 +172,11 @@ header features_h {
     bit<16> tls_version; 
 }
 
-struct flow_class_digest {  // maximum size allowed is 47 bytes
-    bit<INDEX_WIDTH> flow_ID;
-    bit<INDEX_WIDTH> rev_flow_ID;
-    bit<32> src_addr;
-    bit<32> dst_addr;
-    bit<16> src_port;
-    bit<16> dst_port;
-    bit<16> client_hello_len;
-    bit<16> client_hello_exts_number;
-    bit<16> server_hello_len;
-    bit<16> server_hello_exts_number;
-    bit<16> tls_version; 
-    bit<8> class_value;
-}
-
-struct client_hello_digest { 
-    bit<INDEX_WIDTH> flow_ID;
-    bit<32> src_addr;
-    bit<32> dst_addr;
-    bit<16> src_port;
-    bit<16> dst_port;
-    bit<16> client_hello_len;
-    bit<16> client_hello_exts_number;
-}
-
-struct processing_time_digest {
-    bit<INDEX_WIDTH> flow_ID;
-    bit<32> DPDK_proc_time;
-    bit<32> frwd_proc_time;
-}
-
 /***********************  I N G R E S S  H E A D E R S  ************************/
 struct my_ingress_headers_t {
     ethernet_h   ethernet;
     recirc_h     recirc;
 
-    dpdk_h       dpdk;
-    client_hello_dpdk_h client_hello_dpdk;
-    server_hello_dpdk_h server_hello_dpdk;
     features_h features;
 
     ipv4_h       ipv4;
@@ -269,15 +202,6 @@ struct my_ingress_headers_t {
     tls_exts_len_h extensions_len;
     tls_ext_h extensions;
     tls_ext_h extension;
-    tls_ext_h extension_long;
-    tls_ext_h extension_long_1;
-    ctls_ext_sni_h client_servername;
-    hostname_part1 servername_part1;
-    hostname_part2 servername_part2;
-    hostname_part4 servername_part4;
-    hostname_part8 servername_part8;
-    hostname_part16 servername_part16;
-    hostname_part32 servername_part32;
 
 }
 
@@ -287,8 +211,6 @@ struct my_ingress_metadata_t {
     bit<INDEX_WIDTH> rev_flow_ID;
     bit<8> final_class;
     bit<8> unparsed;
-    bit<32> DPDK_proc_time;
-    bit<32> frwd_proc_time;
     MirrorId_t ing_mir_ses;   // Ingress mirror session ID
     pkt_type_t pkt_type;
 }
@@ -299,9 +221,6 @@ struct my_egress_headers_t {
     // mirror_bridged_metadata_h bridged_md;
     mirror_h mirror_md;
     ethernet_h ethernet;
-    dpdk_h dpdk;
-    client_hello_dpdk_h client_hello_dpdk;
-    server_hello_dpdk_h server_hello_dpdk;
     recirc_h     recirc;
     features_h features; // This one is equal to tls_server_hello_h + tls_client_hello_h
 	ipv4_h ipv4;
@@ -324,6 +243,6 @@ struct my_egress_metadata_t {
     bit<10> codeword0;
     bit<11> codeword1;
     bit<12> codeword2;
-    bit<8> codeword3;
+    bit<8>  codeword3;
     bit<13> codeword4;
 }
