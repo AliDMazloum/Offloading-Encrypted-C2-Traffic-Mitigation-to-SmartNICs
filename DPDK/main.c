@@ -151,20 +151,6 @@ struct qps_per_lcore
     uint16_t nb_qps;
 };
 
-struct regex_conf
-{
-    uint32_t nb_jobs;
-    bool perf_mode;
-    uint8_t nb_max_matches;
-    uint32_t nb_qps;
-    uint16_t qp_id_base;
-    char *data_buf;
-    long data_len;
-    long job_len;
-    uint32_t nb_segs;
-    uint32_t match_mode;
-};
-
 struct rte_client_hello_dpdk_hdr
 {
     uint8_t type;
@@ -180,52 +166,6 @@ struct rte_server_hello_dpdk_hdr
     uint16_t version;
 } __rte_packed;
 
-static long
-read_file(char *file, char **buf)
-{
-    FILE *fp;
-    long buf_len = 0;
-    size_t read_len;
-    int res = 0;
-
-    fp = fopen(file, "r");
-    if (!fp)
-        return -EIO;
-    if (fseek(fp, 0L, SEEK_END) == 0)
-    {
-        buf_len = ftell(fp);
-        if (buf_len == -1)
-        {
-            res = EIO;
-            goto error;
-        }
-        *buf = rte_malloc(NULL, sizeof(char) * (buf_len + 1), 4096);
-        if (!*buf)
-        {
-            res = ENOMEM;
-            goto error;
-        }
-        if (fseek(fp, 0L, SEEK_SET) != 0)
-        {
-            res = EIO;
-            goto error;
-        }
-        read_len = fread(*buf, sizeof(char), buf_len, fp);
-        if (read_len != (unsigned long)buf_len)
-        {
-            res = EIO;
-            goto error;
-        }
-    }
-    fclose(fp);
-    return buf_len;
-error:
-    printf("Error, can't open file %s\n, err = %d", file, res);
-    if (fp)
-        fclose(fp);
-    rte_free(*buf);
-    return -res;
-}
 
 /* >8 End of launching function on lcore. */
 static inline int
@@ -295,194 +235,11 @@ port_init(uint16_t port, struct rte_mempool *mbuf_pool)
     return 0;
 }
 
-static inline int
-regex_init(void)
-{
-
-    uint16_t id;
-    uint16_t qp_id;
-    uint16_t num_devs;
-    int retval;
-    long rules_len;
-    char *rules = NULL;
-    struct rte_regexdev_info info;
-    struct rte_regexdev_config dev_conf = {
-        .nb_queue_pairs = 1,
-        .nb_groups = 1,
-    };
-    struct rte_regexdev_qp_conf qp_conf = {
-        .nb_desc = 1024,
-        .qp_conf_flags = 0,
-    };
-    char rules_file[MAX_FILE_NAME] = "/home/ubuntu/rof/.rof2.binary";
-
-    rules_len = read_file(rules_file, &rules);
-    if (rules_len < 0)
-    {
-        printf("Error, can't read rules files.\n");
-        retval = -EIO;
-        goto error;
-    }
-
-    num_devs = rte_regexdev_count();
-    for (id = 0; id < num_devs; id++)
-    {
-        retval = rte_regexdev_info_get(id, &info);
-        if (retval != 0)
-        {
-            printf("Error, can't get device info.\n");
-            goto error;
-        }
-        printf(":: initializing dev: %d\n", id);
-        if (info.regexdev_capa & RTE_REGEXDEV_SUPP_MATCH_AS_END_F)
-            dev_conf.dev_cfg_flags |=
-                RTE_REGEXDEV_CFG_MATCH_AS_END_F;
-        dev_conf.nb_max_matches = info.max_matches;
-        dev_conf.nb_rules_per_group = info.max_rules_per_group;
-        dev_conf.rule_db_len = rules_len;
-        dev_conf.rule_db = rules;
-        retval = rte_regexdev_configure(id, &dev_conf);
-        if (retval < 0)
-        {
-            printf("Error, can't configure device %d.\n", id);
-            goto error;
-        }
-        if (info.regexdev_capa & RTE_REGEXDEV_CAPA_QUEUE_PAIR_OOS_F)
-            qp_conf.qp_conf_flags |=
-                RTE_REGEX_QUEUE_PAIR_CFG_OOS_F;
-        for (qp_id = 0; qp_id < 1; qp_id++)
-        {
-            retval = rte_regexdev_queue_pair_setup(id, qp_id,
-                                                   &qp_conf);
-            if (retval < 0)
-            {
-                printf("Error, can't setup queue pair %u for "
-                       "device %d.\n",
-                       qp_id, id);
-                goto error;
-            }
-        }
-        printf(":: initializing device: %d done\n", id);
-    }
-    rte_free(rules);
-    return 0;
-
-error:
-    rte_free(rules);
-    return retval;
-}
-
-#define MAX_NAME_LENGTH 100
-char **read_names_from_file(const char *filename, int *num_names);
-char **read_names_from_file(const char *filename, int *num_names)
-{
-    FILE *file = fopen(filename, "r");
-    if (file == NULL)
-    {
-        perror("Error opening file");
-        return NULL;
-    }
-
-    char **names = NULL;
-    *num_names = 0;
-    char line[MAX_NAME_LENGTH];
-
-    while (fgets(line, sizeof(line), file) != NULL)
-    {
-        // Remove newline character if present
-        line[strcspn(line, "\n")] = '\0';
-
-        // Allocate memory for the new name
-        char *new_name = malloc(strlen(line) + 1);
-        if (new_name == NULL)
-        {
-            fprintf(stderr, "Memory allocation failed for name: %s\n", line);
-            fclose(file);
-
-            // Free all previously allocated names on error
-            for (int i = 0; i < *num_names; i++)
-            {
-                free(names[i]);
-            }
-            free(names);
-
-            return NULL;
-        }
-
-        // Copy the name into allocated memory
-        strcpy(new_name, line);
-
-        // Resize the names array to hold the new name
-        char **temp = realloc(names, (*num_names + 1) * sizeof(char *));
-        if (temp == NULL)
-        {
-            fprintf(stderr, "Memory reallocation failed\n");
-            free(new_name);
-            fclose(file);
-
-            // Free all previously allocated names on error
-            for (int i = 0; i < *num_names; i++)
-            {
-                free(names[i]);
-            }
-            free(names);
-
-            return NULL;
-        }
-        names = temp;
-
-        // Store the new name in the names array
-        names[*num_names] = new_name;
-        (*num_names)++;
-    }
-
-    fclose(file);
-    return names;
-}
-
-int compare_strings(const void *a, const void *b);
-int compare_strings(const void *a, const void *b)
-{
-    const char *const *ptr1 = (const char *const *)a;
-    const char *const *ptr2 = (const char *const *)b;
-    const char *str1 = *ptr1;
-    const char *str2 = *ptr2;
-    return strcmp(str1, str2);
-}
-
-static void
-extbuf_free_cb(void *addr __rte_unused, void *fcb_opaque __rte_unused)
-{
-}
 
 static int
 lcore_main(void *mbuf_pool)
 {
     uint16_t port;
-    struct rte_regex_ops **ops;
-    // struct rte_regexdev_match *match;
-    uint8_t nb_matches;
-    struct rte_mbuf_ext_shared_info shinfo;
-    shinfo.free_cb = extbuf_free_cb;
-
-    ops = rte_malloc(NULL, sizeof(*ops), 0);
-    if (!ops)
-    {
-        printf("Error, can't allocate memory for ops.\n");
-    }
-    ops[0] = rte_malloc(NULL, sizeof(*ops[0]) + sizeof(struct rte_regexdev_match), 0);
-    if (!ops[0])
-    {
-        printf("Error, can't allocate "
-               "memory for op.\n");
-    }
-    ops[0]->mbuf = rte_pktmbuf_alloc(mbuf_pool);
-
-    char *dest_buf;
-    dest_buf =
-        rte_malloc(NULL, sizeof(char) * (MAX_SERVER_NAME), 4096);
-    if (!dest_buf)
-        return -ENOMEM;
 
     RTE_ETH_FOREACH_DEV(port)
     if (rte_eth_dev_socket_id(port) >= 0 &&
@@ -495,11 +252,6 @@ lcore_main(void *mbuf_pool)
 
     printf("\nCore %u forwarding packets. [Ctrl+C to quit]\n",
            rte_lcore_id());
-
-    const char *filename = "/home/ubuntu/dpdk/examples/DNS_TLS/random_strings.txt";
-    int num_names;
-    char **names = read_names_from_file(filename, &num_names);
-    qsort(names, num_names, sizeof(names[0]), compare_strings);
 
     uint16_t pkt_count = 0;
     // printf("ALi");
@@ -515,7 +267,7 @@ lcore_main(void *mbuf_pool)
             // break;
             if (nb_rx > 0)
             {
-                // printf("Ali \n");
+                printf("Ali \n");
                 // uint64_t timestamp = rte_get_tsc_cycles();
                 // uint64_t tsc_hz = rte_get_tsc_hz();
                 // double timestamp_us = (double)timestamp / tsc_hz * 1e6;
@@ -608,62 +360,6 @@ lcore_main(void *mbuf_pool)
                                             uint16_t ext_type = rte_cpu_to_be_16(pTlsExtHdr->type);
                                             uint16_t ext_len = rte_cpu_to_be_16(pTlsExtHdr->len);
                                             tlsdata_offset += sizeof(struct rte_tls_ext_hdr);
-                                            // if (ext_type == 0)
-                                            // {
-                                            //     if (ext_len == 0)
-                                            //     {
-                                            //         break;
-                                            //     }
-                                            //     uint32_t name_offset = tlsdata_offset + sizeof(struct rte_ctls_ext_sni_hdr);
-
-                                            //     char *server_name = rte_pktmbuf_mtod_offset(bufs[i], char *, name_offset);
-                                            //     int server_name_len = strlen(server_name);
-                                            //     // rte_memcpy(dest_buf, server_name, server_name_len + 1);
-
-                                            //     if (ops[0]->mbuf)
-                                            //     {
-
-                                            //         rte_pktmbuf_attach_extbuf(ops[0]->mbuf,
-                                            //                                   server_name, 0, server_name_len, &shinfo);
-
-                                            //         ops[0]->mbuf->data_len = server_name_len;
-                                            //         ops[0]->mbuf->pkt_len = server_name_len;
-                                            //     }
-                                             
-                                            //     else
-                                            //     {
-                                            //         printf("There is no space for ops[0]->mbuf");
-                                            //     }
-                                            //     ops[0]->user_id = i;
-                                            //     ops[0]->group_id0 = 1;
-                                            //     ops[0]->req_flags |= RTE_REGEX_OPS_REQ_STOP_ON_MATCH_F;
-
-                                            //     uint32_t nb_enqueue =  rte_regexdev_enqueue_burst(0,
-                                            //                                0,
-                                            //                                ops,
-                                            //                                1);
-
-                                            //     uint32_t nb_dequeue = 0;
-                                            //     while(nb_enqueue != nb_dequeue){
-                                            //         nb_dequeue = rte_regexdev_dequeue_burst(0,
-                                            //                                0,
-                                            //                                ops,
-                                            //                                1);
-                                            //                                }
-
-                                            //     nb_matches = ops[0]->nb_matches;
-                                            //     if (nb_matches > 0)
-                                            //     {
-                                            //         // nb_rx--;
-                                            //         // rte_pktmbuf_free(bufs[i]);
-                                            //         // printf("Packet Blacklisted. Ethernet type is %u \n",ethernet_type);
-                                            //         blacklisted = true;
-                                            //         client_hello_dpdk->exts_num = rte_cpu_to_be_16(240);
-
-                                            //     }
-                                                
-                                            // }
-                                            // break;
                                             tlsdata_offset += ext_len;
                                             exts_len -= ext_len;
                                             exts_len -= sizeof(struct rte_tls_ext_hdr);
@@ -847,17 +543,7 @@ int main(int argc, char **argv)
     }
     else{
         printf("port %u initialized\n",portid);
-    }
-
-    if (regex_init() != 0)
-    {
-        rte_exit(EXIT_FAILURE, "Cannot init regex device");
-    }
-
-    // struct rte_cryptodev_info dev_info;
-    // rte_cryptodev_info_get(0, &dev_info);
-    // uint8_t driver_id = dev_info.driver_id;
-    // printf("The crypto driver name is %u\n",driver_id);
+    };
 
     RTE_LCORE_FOREACH_WORKER(lcore_id)
     {
