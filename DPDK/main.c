@@ -50,6 +50,7 @@
 
 #include <rte_hash.h>
 #include <rte_jhash.h>
+#include <jansson.h>
 
 #define RX_RING_SIZE (1 << 14)
 #define TX_RING_SIZE (1 << 14)
@@ -61,7 +62,7 @@
 
 #define MBUF_CACHE_SIZE 256
 
-#define HASH_TABLE_SIZE 1024 
+#define HASH_TABLE_SIZE (1 << 15) 
 
 struct worker_args
 {
@@ -261,9 +262,8 @@ struct flow_key {
 };
 
 struct flow_entry {
-    uint64_t timestamp;
-    uint32_t bytes;
-    uint32_t packets;
+    uint16_t client_len;
+    uint16_t exts_num;
 };
 
 static int
@@ -280,27 +280,6 @@ lcore_main(void *args)
 
     struct flow_key key;
     struct flow_entry entry;
-
-        // Insert a flow entry
-    key.src_ip = 0x0a000001;  // Example: 10.0.0.1
-    key.dst_ip = 0x0a000002;  // Example: 10.0.0.2
-    key.src_port = 12345;
-    key.dst_port = 80;
-    key.protocol = 6;  // TCP
-
-    entry.timestamp = 123456789;
-    entry.bytes = 1000;
-    entry.packets = 10;
-
-    ret = rte_hash_add_key_data(flow_table, &key, &entry);
-    if (ret < 0) {
-        rte_panic("Failed to add flow entry\n");
-    }
-    else{
-        printf("Entry is added\n");
-    }
-
-
 
     RTE_ETH_FOREACH_DEV(port)
     if (rte_eth_dev_socket_id(port) >= 0 &&
@@ -336,9 +315,7 @@ lcore_main(void *args)
                 // uint64_t timestamp = rte_get_tsc_cycles();
                 // uint64_t tsc_hz = rte_get_tsc_hz();
                 // double timestamp_us = (double)timestamp / tsc_hz * 1e6;
-                struct rte_ether_hdr *ethernet_header;
-                struct rte_client_hello_dpdk_hdr *client_hello_dpdk;
-                struct rte_server_hello_dpdk_hdr *server_hello_dpdk;    
+                struct rte_ether_hdr *ethernet_header; 
                 struct rte_ipv4_hdr *pIP4Hdr;
                 struct rte_tcp_hdr *pTcpHdr;
                 struct rte_tls_hdr *pTlsHdr;
@@ -359,16 +336,16 @@ lcore_main(void *args)
                     ethernet_type = ethernet_header->ether_type;
                     ethernet_type = rte_cpu_to_be_16(ethernet_type);
 
-                    // if (ethernet_type == 2048)
-                    if (ethernet_type == 2000) // Client Hello packet from the P4
+                    if (ethernet_type == 2048)
+                    // if (ethernet_type == 2000) // Client Hello packet from the P4
                     {
                         ethernet_header->ether_type = rte_cpu_to_be_16(0x0700);
 
-                        client_hello_dpdk = rte_pktmbuf_mtod_offset(bufs[i], struct rte_client_hello_dpdk_hdr *, sizeof(struct rte_ether_hdr));
-                        client_hello_dpdk->type = 0x1;
-                        uint32_t ipdata_offset = sizeof(struct rte_ether_hdr) + sizeof(struct rte_client_hello_dpdk_hdr);
+                        uint32_t ipdata_offset = sizeof(struct rte_ether_hdr);
 
                         pIP4Hdr = rte_pktmbuf_mtod_offset(bufs[i], struct rte_ipv4_hdr *, ipdata_offset);
+                        uint32_t src_ip = rte_be_to_cpu_32(pIP4Hdr->src_addr);
+                        uint32_t dst_ip = rte_be_to_cpu_32(pIP4Hdr->dst_addr);
                         uint8_t IPv4NextProtocol = pIP4Hdr->next_proto_id;
                         ipdata_offset += (pIP4Hdr->version_ihl & RTE_IPV4_HDR_IHL_MASK) * RTE_IPV4_IHL_MULTIPLIER;
 
@@ -391,7 +368,6 @@ lcore_main(void *args)
                                     pTlsHandshakeHdr = rte_pktmbuf_mtod_offset(bufs[i], struct rte_tls_hello_hdr *, tlsdata_offset);
                                     uint8_t handshake_type = pTlsHandshakeHdr->type;
                                     uint16_t temp_len = uint24_to_16(pTlsHandshakeHdr->len);
-                                    client_hello_dpdk->len = rte_cpu_to_be_16(temp_len);
                                     tlsdata_offset += sizeof(struct rte_tls_hello_hdr);
                                     if (handshake_type == 1)
                                     {
@@ -423,48 +399,27 @@ lcore_main(void *args)
                                             exts_len -= ext_len;
                                             exts_len -= sizeof(struct rte_tls_ext_hdr);
                                         }
-                                        if(!blacklisted){
-                                            client_hello_dpdk->exts_num = rte_cpu_to_be_16(exts_nums);
-                                        }
+
+                                        key.src_ip = src_ip;  
+                                        key.dst_ip = dst_ip; 
+                                        key.src_port = src_port;
+                                        key.dst_port = dst_port;
+                                        key.protocol = IPv4NextProtocol;
+
+                                        entry.client_len = temp_len;
+                                        entry.exts_num = exts_nums;
+
+
+                                        // ret = rte_hash_add_key_data(flow_table, &key, &entry);
+                                        // if (ret < 0) {
+                                        //     rte_panic("Failed to add flow entry\n");
+                                        // }
+                                        // else{
+                                        //     // printf("Entry is added with len %u and exts_num %u\n",entry.client_len, entry.exts_num);
+                                        // }
+
                                     }
-                                }
-                            }
-                        }
-                    }
-                    else if (ethernet_type == 2001) // Server Hello packet from the P4
-                    {
-                        ethernet_header->ether_type = rte_cpu_to_be_16(0x0700);
-
-                        server_hello_dpdk = rte_pktmbuf_mtod_offset(bufs[i], struct rte_server_hello_dpdk_hdr *, sizeof(struct rte_ether_hdr));
-                        server_hello_dpdk->type = 2;
-                        uint32_t ipdata_offset = sizeof(struct rte_ether_hdr) + sizeof(struct rte_server_hello_dpdk_hdr);
-
-                        pIP4Hdr = rte_pktmbuf_mtod_offset(bufs[i], struct rte_ipv4_hdr *, ipdata_offset);
-                        uint8_t IPv4NextProtocol = pIP4Hdr->next_proto_id;
-                        ipdata_offset += (pIP4Hdr->version_ihl & RTE_IPV4_HDR_IHL_MASK) * RTE_IPV4_IHL_MULTIPLIER;
-
-                        if (IPv4NextProtocol == 6)
-                        {
-
-                            pTcpHdr = rte_pktmbuf_mtod_offset(bufs[i], struct rte_tcp_hdr *, ipdata_offset);
-                            uint16_t dst_port = rte_be_to_cpu_16(pTcpHdr->dst_port);
-                            uint16_t src_port = rte_be_to_cpu_16(pTcpHdr->src_port);
-                            uint8_t tcp_dataoffset = pTcpHdr->data_off >> 4;
-                            uint32_t tcpdata_offset = ipdata_offset + sizeof(struct rte_tcp_hdr) + (tcp_dataoffset - 5) * 4;
-                            if (dst_port == 443 || src_port == 443)
-                            {
-
-                                pTlsHdr = rte_pktmbuf_mtod_offset(bufs[i], struct rte_tls_hdr *, tcpdata_offset);
-                                uint8_t tls_type = pTlsHdr->type;
-                                uint32_t tlsdata_offset = tcpdata_offset + sizeof(struct rte_tls_hdr);
-                                if (tls_type == 0x16)
-                                {
-                                    pTlsHandshakeHdr = rte_pktmbuf_mtod_offset(bufs[i], struct rte_tls_hello_hdr *, tlsdata_offset);
-                                    uint8_t handshake_type = pTlsHandshakeHdr->type;
-                                    uint16_t temp_len = uint24_to_16(pTlsHandshakeHdr->len);
-                                    server_hello_dpdk->len = rte_cpu_to_be_16(temp_len);
-                                    tlsdata_offset += sizeof(struct rte_tls_hello_hdr);
-                                    if (handshake_type == 2)
+                                    else if (handshake_type == 2)
                                     {
                                         pTlsSessionHdr = rte_pktmbuf_mtod_offset(bufs[i], struct rte_tls_session_hdr *, tlsdata_offset);
                                         tlsdata_offset += (pTlsSessionHdr->len) + sizeof(struct rte_tls_session_hdr);
@@ -489,26 +444,21 @@ lcore_main(void *args)
                                             exts_len -= ext_len;
                                             exts_len -= sizeof(struct rte_tls_ext_hdr);
                                         }
-                                        server_hello_dpdk->exts_num = rte_cpu_to_be_16(exts_nums);
-                                    }
- 
-                                    pTlsRecord1 = rte_pktmbuf_mtod_offset(bufs[i], struct rte_tls_hdr *, tlsdata_offset);
-                                    tlsdata_offset += sizeof(struct rte_tls_hdr) + rte_be_to_cpu_16(pTlsRecord1->length);
-                                    handshake_type = pTlsRecord1->type;
+                                        key.src_ip = dst_ip;  
+                                        key.dst_ip = src_ip; 
+                                        key.src_port = dst_port;
+                                        key.dst_port = src_port;
+                                        key.protocol = IPv4NextProtocol;
 
-                                    server_hello_dpdk->version = rte_cpu_to_be_16(2);
-                                    if(handshake_type == 0x16){
-                                        server_hello_dpdk->version = rte_cpu_to_be_16(2);
-                                    }
-                                    else if(handshake_type == 0x14){
-                                        pTlsRecord2 = rte_pktmbuf_mtod_offset(bufs[i], struct rte_tls_hdr *, tlsdata_offset);
-                                        handshake_type = pTlsRecord2->type;
-                                        if(handshake_type == 0x17){
-                                            server_hello_dpdk->version = rte_cpu_to_be_16(3);
+                                        ret = rte_hash_lookup_data(flow_table, &key, (void **)&entry);
+                                        if (ret < 0) {
+                                            printf("Flow entry not found\n");
+                                        } else {
+                                            printf("Flow entry found: %u client len, %u client exts_count, %u server len, %u server exts_count, \n"
+                                            , entry.client_len, entry.exts_num,temp_len,exts_nums);
+                                            // rte_hash_del_key(flow_table, &key);
+                                            // exit(1);
                                         }
-                                    }
-                                    else if(handshake_type == 0x17){
-                                        server_hello_dpdk->version = rte_cpu_to_be_16(3);
                                     }
                                 }
                             }
@@ -616,7 +566,10 @@ int main(int argc, char **argv)
         rte_eal_remote_launch(lcore_main, &arguments, lcore_id);
     }
 
+
     rte_eal_mp_wait_lcore();
+
+    rte_hash_free(flow_table);
 
     close_ports();
 
