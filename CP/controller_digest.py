@@ -22,7 +22,7 @@ import bfrt_grpc.client as bfrt_client
 import socket, struct
 
 filename_out = sys.argv[1] #output csv file with classification results
-# Actual_class = sys.argv[2] #the actual classification
+Actual_class = sys.argv[2] #the actual classification
 
 # Connect to the BF Runtime Server
 interface = bfrt_client.ClientInterface(
@@ -41,18 +41,19 @@ interface.bind_pipeline_config(bfrt_info.p4_name_get())
 
 # Get digest
 learn_filter = bfrt_info.learn_get("digest_flow_class")
-learn_filter_1 = bfrt_info.learn_get("digest_client_hello")
+# learn_filter_1 = bfrt_info.learn_get("digest_client_hello")
 # learn_filter_2 = bfrt_info.learn_get("digest_detected_flow")
-learn_filter_3 = bfrt_info.learn_get("digest_proc_time")
+# learn_filter_3 = bfrt_info.learn_get("digest_proc_time")
 
 
 target = bfrt_client.Target(device_id=0, pipe_id=0xffff)
 
-# header = 'flow_ID rev_flow_ID src_ip dst_ip src_port dst_port client_hello_len, client_hello_exts_number, server_hello_len, server_hello_exts_number,tls_version'
+header = 'flow_ID, rev_flow_ID, src_ip, dst_ip, src_port, dst_port, client_hello_len, client_hello_exts_number, server_hello_len, server_hello_exts_number,tls_version'
 
 # header = 'Actual Pridected'
 
-header = 'flow_ID DPDK_proc_time frwd_proc_time'
+# header = 'flow_ID DPDK_proc_time frwd_proc_time'
+header = 'client_hello_len, client_hello_exts_number, server_hello_len, server_hello_exts_number, tls_version, flow_packet_class'
 
 with open(filename_out, "w") as text_file:
     text_file.write(header)
@@ -69,8 +70,8 @@ while True:
 
     recv_target = digest.target
 
-    data_list = learn_filter_3.make_data_list(digest)
-    digest_type = 3
+    # data_list = learn_filter_3.make_data_list(digest)
+    digest_type = 1
             
 
     if digest_type == 1:
@@ -103,23 +104,24 @@ while True:
             server_hello_exts_number+ ", " +tls_version+ ", " + flow_packet_class
 
             with open(filename_out, "a") as text_file:
-                    text_file.write(Actual_class +" " +flow_packet_class)
-                    text_file.write("\n")
-    
-    if digest_type == 3:
-        data_list = learn_filter_3.make_data_list(digest)
-        for dd in data_list:
-            data_dict = dd.to_dict()
-
-            flow_id = str(data_dict['flow_ID'])
-            DPDK_proc_time = str(data_dict['DPDK_proc_time'])
-            frwd_proc_time = str(data_dict['frwd_proc_time'])
-            
-            #
-            # FlowID =  source_addr + " " + destin_addr + " " + source_port + " " + destin_port + " " + protocol + " " + flow_packet_class            
-
-            ouptut_string = flow_id + " " + DPDK_proc_time + " " + frwd_proc_time
-
-            with open(filename_out, "a") as text_file:
+                    # text_file.write(Actual_class +" " +flow_packet_class)
                     text_file.write(ouptut_string)
                     text_file.write("\n")
+    
+    # if digest_type == 3:
+    #     data_list = learn_filter_3.make_data_list(digest)
+    #     for dd in data_list:
+    #         data_dict = dd.to_dict()
+
+    #         flow_id = str(data_dict['flow_ID'])
+    #         DPDK_proc_time = str(data_dict['DPDK_proc_time'])
+    #         frwd_proc_time = str(data_dict['frwd_proc_time'])
+            
+    #         #
+    #         # FlowID =  source_addr + " " + destin_addr + " " + source_port + " " + destin_port + " " + protocol + " " + flow_packet_class            
+
+    #         ouptut_string = flow_id + " " + DPDK_proc_time + " " + frwd_proc_time
+
+    #         with open(filename_out, "a") as text_file:
+    #                 text_file.write(ouptut_string)
+    #                 text_file.write("\n")

@@ -122,9 +122,15 @@ header tls_client_hello_h {
     bit<256> random;
 }
 
+// header client_hello_features_h {
+//     bit<16> len;
+//     bit<16> exts_num;
+// }
+
 header tls_server_hello_h {
     bit<24> len;
     bit<16> version;
+    bit<256> random;
 }
 
 header tls_session_h {
@@ -140,7 +146,9 @@ header tls_compression_h {
     //  In Client: compressions follow
 }
 header tls_exts_len_h {
-    bit<16> len;
+    // bit<16> len; //modify later
+    bit<8> len_part1; //necessary to initialize the counter which only accepts 8 bits
+    bit<8> len_part2;
 }
 header tls_ext_h {
     bit<16> type;
@@ -172,6 +180,21 @@ header features_h {
     bit<16> tls_version; 
 }
 
+struct flow_class_digest {  // maximum size allowed is 47 bytes
+    bit<INDEX_WIDTH> flow_ID;
+    bit<INDEX_WIDTH> rev_flow_ID;
+    bit<32> src_addr;
+    bit<32> dst_addr;
+    bit<16> src_port;
+    bit<16> dst_port;
+    bit<16> client_hello_len;
+    bit<16> client_hello_exts_number;
+    bit<16> server_hello_len;
+    bit<16> server_hello_exts_number;
+    bit<16> tls_version; 
+    bit<8> class_value;
+}
+
 /***********************  I N G R E S S  H E A D E R S  ************************/
 struct my_ingress_headers_t {
     ethernet_h   ethernet;
@@ -191,17 +214,30 @@ struct my_ingress_headers_t {
     
     // TLS Cleint Hello
     tls_client_hello_h tls_client_hello;
-
-    // TLS Server Hello
-    tls_server_hello_h tls_server_hello;
-
-    // Client Hello
     tls_session_h hello_session;
     tls_cipher_h hello_ciphers;
     tls_compression_h compressions;
+
+    // TLS Server Hello
+    tls_server_hello_h tls_server_hello;
+    tls_session_h hello_server_session;
+
+    // // Client Hello
+    // tls_session_h hello_session;
+    // tls_cipher_h hello_ciphers;
+    // tls_compression_h compressions;
+
+    // Extensions
     tls_exts_len_h extensions_len;
     tls_ext_h extensions;
-    tls_ext_h extension;
+
+    tls_ext_h extension_1;
+    tls_ext_h extension_2;
+
+    tls_ext_h extension_3;
+    tls_ext_h extension_4;
+    tls_ext_h extension_5;
+    tls_ext_h extension_6;
 
 }
 
@@ -213,6 +249,10 @@ struct my_ingress_metadata_t {
     bit<8> unparsed;
     MirrorId_t ing_mir_ses;   // Ingress mirror session ID
     pkt_type_t pkt_type;
+
+    bit<16> extensions_count;
+    bit<16> do_rec;
+
 }
 
 /***********************  E G R E S S  H E A D E R S  ***************************/

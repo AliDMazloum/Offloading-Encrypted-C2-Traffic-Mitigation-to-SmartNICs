@@ -88,41 +88,43 @@ control Ingress(
     }
 
     /*---------------------------------------Start  Register Defenisions ------------------------------------*/
-    // /* Register for Client extentions number per flow */
-    // Register<bit<8>,bit<(INDEX_WIDTH)>>(MAX_REGISTER_ENTRIES) flow_client_exts_num;
-    // /* Register set action */
-    // RegisterAction<bit<8>,bit<(INDEX_WIDTH)>,bit<16>>(flow_client_exts_num)
-    // set_flow_client_exts_num = {
-    //     void apply(inout bit<8> exts_num) {
-    //         exts_num = hdr.client_hello_dpdk.exts_num[7:0];
-    //     }
-    // };
-    // /* Register read action */
-    // RegisterAction<bit<16>,bit<(INDEX_WIDTH)>,bit<16>>(flow_client_exts_num)
-    // get_flow_client_exts_num = {
-    //     void apply(inout bit<16> exts_num, out bit<16> output) {
-    //         output = exts_num;
-    //         exts_num = 0;
-    //     }
-    // };
+    /* Register for Client extentions number per flow */
+    Register<bit<16>,bit<(INDEX_WIDTH)>>(MAX_REGISTER_ENTRIES) flow_client_exts_num;
+    /* Register set action */
+    RegisterAction<bit<16>,bit<(INDEX_WIDTH)>,bit<16>>(flow_client_exts_num)
+    set_flow_client_exts_num = {
+        void apply(inout bit<16> exts_num) {
+            exts_num = meta.extensions_count;
+            // exts_num = hdr.extensions_len.len;
+            // exts_num = meta.temp;
+        }
+    };
+    /* Register read action */
+    RegisterAction<bit<16>,bit<(INDEX_WIDTH)>,bit<16>>(flow_client_exts_num)
+    get_flow_client_exts_num = {
+        void apply(inout bit<16> exts_num, out bit<16> output) {
+            output = exts_num;
+            exts_num = 0;
+        }
+    };
 
-    // /* Register for Client Hello len per flow */
-    // Register<bit<INDEX_WIDTH>,bit<(INDEX_WIDTH)>>(MAX_REGISTER_ENTRIES) flow_client_hello_len;
-    // /* Register set action */
-    // RegisterAction<bit<INDEX_WIDTH>,bit<(INDEX_WIDTH)>,bit<INDEX_WIDTH>>(flow_client_hello_len)
-    // set_flow_client_hello_len = {
-    //     void apply(inout bit<INDEX_WIDTH> len) {
-    //         len = hdr.client_hello_dpdk.len;
-    //     }
-    // };
-    // /* Register read action */
-    // RegisterAction<bit<INDEX_WIDTH>,bit<(INDEX_WIDTH)>,bit<INDEX_WIDTH>>(flow_client_hello_len)
-    // get_flow_client_hello_len = {
-    //     void apply(inout bit<INDEX_WIDTH> len, out bit<INDEX_WIDTH> output) {
-    //         output = len;
-    //         len = 0;
-    //     }
-    // };
+    /* Register for Client Hello len per flow */
+    Register<bit<INDEX_WIDTH>,bit<(INDEX_WIDTH)>>(MAX_REGISTER_ENTRIES) flow_client_hello_len;
+    /* Register set action */
+    RegisterAction<bit<INDEX_WIDTH>,bit<(INDEX_WIDTH)>,bit<INDEX_WIDTH>>(flow_client_hello_len)
+    set_flow_client_hello_len = {
+        void apply(inout bit<INDEX_WIDTH> len) {
+            len = hdr.tls_client_hello.len[15:0];
+        }
+    };
+    /* Register read action */
+    RegisterAction<bit<INDEX_WIDTH>,bit<(INDEX_WIDTH)>,bit<INDEX_WIDTH>>(flow_client_hello_len)
+    get_flow_client_hello_len = {
+        void apply(inout bit<INDEX_WIDTH> len, out bit<INDEX_WIDTH> output) {
+            output = len;
+            len = 0;
+        }
+    };
 
     // #define TIMESTAMP ig_intr_md.ingress_mac_tstamp[31:0]
     // /* Register for Server Hello First Observation Timestamp */
@@ -209,34 +211,57 @@ control Ingress(
 
     apply {
 
-        if(hdr.tls_client_hello.isValid() || meta.unparsed == 1){
-            ig_dprsr_md.mirror_type = 1;
-            meta.pkt_type = 11;
-            meta.ing_mir_ses = 28;
+        if(hdr.tls_client_hello.isValid()){
+            get_flow_ID();
+            meta.flow_ID =  meta.flow_ID >> 1;
+            set_flow_client_exts_num.execute(meta.flow_ID);
+            set_flow_client_hello_len.execute(meta.flow_ID);
+
+            // ig_dprsr_md.mirror_type = 1;
+            // meta.pkt_type = 11;
+            // meta.ing_mir_ses = 28;
+
         }
         else if(hdr.tls_server_hello.isValid()){
             get_rev_flow_ID();
             meta.rev_flow_ID = meta.rev_flow_ID >>1;
-            ig_dprsr_md.mirror_type = 1;
-            meta.pkt_type = 22;
-            meta.ing_mir_ses = 28;
+
+            recirculate(68);
+
+            hdr.features.setValid();
+
+            hdr.features.client_hello_len = get_flow_client_hello_len.execute(meta.rev_flow_ID);
+            hdr.features.client_hello_exts_number = get_flow_client_exts_num.execute(meta.rev_flow_ID);
+            hdr.features.server_hello_len = hdr.tls_server_hello.len[15:0];
+            hdr.features.server_hello_exts_number = meta.extensions_count;
+            // hdr.features.server_hello_exts_number = (bit<16>)hdr.extensions_len.len;
+            hdr.features.tls_version = 3;
+
+
+            // ig_dprsr_md.mirror_type = 1;
+            // meta.pkt_type = 22;
+            // meta.ing_mir_ses = 28;
         }
         else if(hdr.recirc.isValid()){
             get_flow_ID();
             get_rev_flow_ID();
             meta.flow_ID =  meta.flow_ID >> 1;
             meta.rev_flow_ID = meta.rev_flow_ID >>1;
+
             hdr.ethernet.ether_type = ETHERTYPE_IPV4;
+
             meta.final_class = hdr.recirc.class_result;
-            // ig_dprsr_md.digest_type = 1; //Digest to report classification result
-            if(hdr.recirc.class_result == 1){
-                hdr.recirc.setInvalid();
-                hdr.features.setInvalid();
-                ig_tm_md.ucast_egress_port = 140;
-            }
-            else{
-                drop();
-            }
+            ig_dprsr_md.digest_type = 1; //Digest to report classification result
+            hdr.recirc.setInvalid();
+
+            // if(hdr.recirc.class_result == 1){
+            //     hdr.recirc.setInvalid();
+            //     hdr.features.setInvalid();
+            //     ig_tm_md.ucast_egress_port = 140;
+            // }
+            // else{
+            //     drop();
+            // }
         }
     }
 }
