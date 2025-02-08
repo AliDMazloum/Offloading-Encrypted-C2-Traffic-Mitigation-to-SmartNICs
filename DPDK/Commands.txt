@@ -28,11 +28,11 @@ commands to disable and remove SF:
     1. Create the bridge:
         -ovs-vsctl add-br br1
     2. Add the ports
-        -ovs-vsctl add-port br0 p1
-        -ovs-vsctl add-port br0 en3f0pf0sf3
+        -ovs-vsctl add-port br1 p1
+        -ovs-vsctl add-port br1 en3f0pf0sf3
     3. Define the forwarding rules # use "ovs-vsctl list interface en3f0pf0sf4" to get the interface ID in ovs
-        -ovs-ofctl add-flow br0 in_port=1,action=output:2
-        -ovs-ofctl add-flow br0 in_port=2,action=output:1
+        -ovs-ofctl add-flow br1 in_port=1,action=output:2
+        -ovs-ofctl add-flow br1 in_port=2,action=output:1
 
 
 ###
