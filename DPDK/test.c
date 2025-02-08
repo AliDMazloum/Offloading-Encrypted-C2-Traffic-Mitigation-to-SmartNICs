@@ -4,14 +4,15 @@
 #include <jansson.h>
 
 #define MAX_TREES 100
-#define MAX_NODES 500
+#define MAX_NODES 100
 
 // Structure to hold tree node information
 typedef struct {
-    int feature;
-    double threshold;
+    int n_nodes;
     int left_child;
     int right_child;
+    int feature;
+    double threshold;
     int is_leaf;
     int class_label;
 } TreeNode;
@@ -20,7 +21,7 @@ typedef struct {
 typedef struct {
     int n_estimators;
     int max_depth;
-    double feature_importances[4];
+    double feature_importances[5];
     TreeNode trees[MAX_TREES][MAX_NODES];
 } RandomForest;
 
@@ -43,7 +44,7 @@ int load_rf_model(const char *filename, RandomForest *rf) {
     rf->max_depth = json_integer_value(max_depth);
 
     // Parse feature importances
-    for (int i = 0; i < 4; i++) {
+    for (int i = 0; i < 5; i++) {
         rf->feature_importances[i] = json_real_value(json_array_get(feature_importances, i));
     }
 
@@ -61,6 +62,8 @@ int load_rf_model(const char *filename, RandomForest *rf) {
         json_t *children_right = json_object_get(tree_data, "children_right");
         json_t *feature = json_object_get(tree_data, "feature");
         json_t *threshold = json_object_get(tree_data, "threshold");
+        json_t *class_label = json_object_get(tree_data, "class_label"); // Holds the class probabilities/counts
+        json_t *leaves = json_object_get(tree_data, "leaves");
 
         for (int i = 0; i < n_nodes; i++) {
             TreeNode *node = &tree[i];
@@ -68,20 +71,15 @@ int load_rf_model(const char *filename, RandomForest *rf) {
             node->threshold = json_real_value(json_array_get(threshold, i));
             node->left_child = json_integer_value(json_array_get(children_left, i));
             node->right_child = json_integer_value(json_array_get(children_right, i));
-
-            // Determine if it's a leaf node (no children)
-            if (node->left_child == -1 && node->right_child == -1) {
-                node->is_leaf = 1;
-                node->class_label = json_integer_value(json_object_get(tree_data, "class_label"));
-            } else {
-                node->is_leaf = 0;
-            }
+            node->class_label = json_integer_value(json_array_get(class_label, i));
+            node->is_leaf = json_integer_value(json_array_get(leaves, i));
         }
     }
 
     json_decref(root);
     return 0;
 }
+
 
 // Function to traverse a tree and make a prediction
 int predict_tree(TreeNode *tree, double *sample, int node_index) {
@@ -108,13 +106,13 @@ int predict(RandomForest *rf, double *sample) {
     }
 
     // Majority voting for classification
-    int count[3] = {0};  // Assuming 3 possible classes
+    int count[2] = {0};  
     for (int i = 0; i < rf->n_estimators; i++) {
         count[predictions[i]]++;
     }
 
     // Find the majority vote
-    for (int i = 0; i < 3; i++) {
+    for (int i = 0; i < 2; i++) {
         if (count[i] > count[final_prediction]) {
             final_prediction = i;
         }
@@ -128,12 +126,12 @@ int main() {
     RandomForest rf;
 
     // Load the model from the JSON file
-    if (load_rf_model("rf_model.json", &rf) != 0) {
+    if (load_rf_model("../rf_model.json", &rf) != 0) {
         return -1;
     }
 
     // Example input sample (e.g., from Iris dataset)
-    double sample[4] = {5.1, 3.5, 1.4, 0.2};  // Sample to classify
+    double sample[5] = {252,10,118,2,3};  // Sample to classify
 
     // Make a prediction
     int prediction = predict(&rf, sample);
