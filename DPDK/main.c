@@ -52,6 +52,8 @@
 #include <rte_jhash.h>
 #include <jansson.h>
 
+#include <rte_flow.h>
+
 #define RX_RING_SIZE (1 << 14)
 #define TX_RING_SIZE (1 << 14)
 
@@ -142,18 +144,6 @@ struct rte_server_name
     uint16_t name;
 } __rte_packed;
 
-struct job_ctx
-{
-    struct rte_mbuf *mbuf;
-};
-
-struct qps_per_lcore
-{
-    unsigned int lcore_id;
-    int socket;
-    uint16_t qp_id_base;
-    uint16_t nb_qps;
-};
 
 struct rte_client_hello_dpdk_hdr
 {
@@ -615,6 +605,60 @@ lcore_main(void *args)
     return 0;
 }
 
+static void
+create_flow_rule(uint8_t port_id)
+{
+    struct rte_flow *flow;
+    struct rte_flow_attr flow_attr = {0};
+    struct rte_flow_item pattern[2];
+    struct rte_flow_item_ipv4 ipv4_spec = {0};
+    struct rte_flow_item_ipv4 ipv4_mask = {0};
+    struct rte_flow_action actions[2];
+    struct rte_flow_action_port_id port_id_config = {
+        .id = port_id
+    };
+
+    struct rte_flow_action *action;
+
+    memset(pattern, 0, sizeof(pattern));
+    memset(actions, 0, sizeof(actions));
+
+    /* Create flow pattern for IPv4 */
+    memset(&ipv4_spec, 0, sizeof(struct rte_flow_item_ipv4));
+    memset(&ipv4_mask, 0, sizeof(struct rte_flow_item_ipv4));
+    pattern[0].type = RTE_FLOW_ITEM_TYPE_IPV4;
+    pattern[0].spec = &ipv4_spec;
+    pattern[0].mask = &ipv4_mask;
+    pattern[1].type = RTE_FLOW_ITEM_TYPE_END;
+
+    /* Set up the flow action */
+    // action = &actions[0];
+    actions[0].type = RTE_FLOW_ACTION_TYPE_PORT_ID;
+    actions[0].conf = &port_id_config;
+    actions[1].type = RTE_FLOW_ACTION_TYPE_END;
+
+    memset(&flow_attr, 0, sizeof(struct rte_flow_attr));
+    flow_attr.ingress = 1; // For inbound packets
+
+    /* Create the flow rule */
+    struct rte_flow_error *error;
+    memset(&error,0,sizeof(struct rte_flow_error));
+    int res = rte_flow_validate(port_id, &flow_attr, pattern, action, error);
+    if(!res)
+        printf("error\n");
+        // flow = rte_flow_create(port_id, &flow_attr, pattern, action, NULL);
+    else
+        rte_exit(EXIT_FAILURE, "Failed to create flow rule\n");
+    
+    // flo<w = rte_flow_create(port_id, &flow_attr, pattern, actions, NULL);
+    // if (flow == NULL) {
+    //     rte_exit(EXIT_FAILURE, "Failed to create flow rule\n");
+    // }>
+
+    printf("Flow rule created successfully\n");
+}
+
+
 static void close_ports(void);
 static void close_ports(void)
 {
@@ -683,6 +727,10 @@ int main(int argc, char **argv)
     else{
         printf("port %u initialized\n",portid);
     };
+
+    // RTE_ETH_FOREACH_DEV(portid)
+    create_flow_rule(1);
+    
 
     RandomForest rf;
 
