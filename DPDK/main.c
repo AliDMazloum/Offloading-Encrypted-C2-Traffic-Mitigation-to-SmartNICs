@@ -577,7 +577,7 @@ lcore_main(void *args)
                                             // printf("Flow entry found: %u client len, %u client exts_count, %u server len, %u server exts_count, \n"
                                             // , entry.client_len, entry.exts_num,temp_len,exts_nums);
                                             // rte_hash_del_key(flow_table, &key);
-                                            // exit(1);
+
                                             sample[0] = entry.client_len;
                                             sample[1] = entry.exts_num;
                                             sample[2] = temp_len;
