@@ -64,11 +64,8 @@
 
 #define HASH_TABLE_SIZE (1 << 15) 
 
-struct worker_args
-{
-    struct rte_mempool *mbuf_pool;
-    struct rte_hash *flow_table;
-};
+#define MAX_TREES 100
+#define MAX_NODES 500
 
 typedef struct
 {
@@ -266,6 +263,126 @@ struct flow_entry {
     uint16_t exts_num;
 };
 
+typedef struct {
+    int n_nodes;
+    int left_child;
+    int right_child;
+    int feature;
+    double threshold;
+    int is_leaf;
+    int class_label;
+} TreeNode;
+
+// Structure to hold random forest model
+typedef struct {
+    int n_estimators;
+    int max_depth;
+    double feature_importances[5];
+    TreeNode trees[MAX_TREES][MAX_NODES];
+} RandomForest;
+
+// Function to read the JSON file and load the Random Forest model
+int load_rf_model(const char *filename, RandomForest *rf) {
+    json_error_t error;
+    json_t *root = json_load_file(filename, 0, &error);
+
+    if (!root) {
+        fprintf(stderr, "Error loading JSON file: %s\n", error.text);
+        return -1;
+    }
+
+    // Parse the general model parameters
+    json_t *n_estimators = json_object_get(root, "n_estimators");
+    json_t *max_depth = json_object_get(root, "max_depth");
+    json_t *feature_importances = json_object_get(root, "feature_importances");
+
+    rf->n_estimators = json_integer_value(n_estimators);
+    rf->max_depth = json_integer_value(max_depth);
+
+    // Parse feature importances
+    for (int i = 0; i < 5; i++) {
+        rf->feature_importances[i] = json_real_value(json_array_get(feature_importances, i));
+    }
+
+    // Parse each decision tree
+    json_t *estimators = json_object_get(root, "estimators");
+    size_t index;
+    json_t *tree_data;
+
+    json_array_foreach(estimators, index, tree_data) {
+        TreeNode *tree = rf->trees[index];
+        size_t n_nodes = json_integer_value(json_object_get(tree_data, "n_nodes"));
+
+        // Parse the nodes of the tree
+        json_t *children_left = json_object_get(tree_data, "children_left");
+        json_t *children_right = json_object_get(tree_data, "children_right");
+        json_t *feature = json_object_get(tree_data, "feature");
+        json_t *threshold = json_object_get(tree_data, "threshold");
+        json_t *class_label = json_object_get(tree_data, "class_label"); // Holds the class probabilities/counts
+        json_t *leaves = json_object_get(tree_data, "leaves");
+
+        for (int i = 0; i < n_nodes; i++) {
+            TreeNode *node = &tree[i];
+            node->feature = json_integer_value(json_array_get(feature, i));
+            node->threshold = json_real_value(json_array_get(threshold, i));
+            node->left_child = json_integer_value(json_array_get(children_left, i));
+            node->right_child = json_integer_value(json_array_get(children_right, i));
+            node->class_label = json_integer_value(json_array_get(class_label, i));
+            node->is_leaf = json_integer_value(json_array_get(leaves, i));
+        }
+    }
+
+    json_decref(root);
+    return 0;
+}
+
+// Function to traverse a tree and make a prediction
+int predict_tree(TreeNode *tree, double *sample, int node_index) {
+    TreeNode *node = &tree[node_index];
+
+    if (node->is_leaf) {
+        return node->class_label;
+    }
+
+    if (sample[node->feature] <= node->threshold) {
+        return predict_tree(tree, sample, node->left_child);
+    } else {
+        return predict_tree(tree, sample, node->right_child);
+    }
+}
+
+// Function to make a prediction using the Random Forest
+int predict(RandomForest *rf, double *sample) {
+    int predictions[MAX_TREES];
+    int final_prediction = 0;
+
+    for (int i = 0; i < rf->n_estimators; i++) {
+        predictions[i] = predict_tree(rf->trees[i], sample, 0);
+    }
+
+    // Majority voting for classification
+    int count[3] = {0};  // Assuming 3 possible classes
+    for (int i = 0; i < rf->n_estimators; i++) {
+        count[predictions[i]]++;
+    }
+
+    // Find the majority vote
+    for (int i = 0; i < 3; i++) {
+        if (count[i] > count[final_prediction]) {
+            final_prediction = i;
+        }
+    }
+
+    return final_prediction;
+}
+
+struct worker_args
+{
+    struct rte_mempool *mbuf_pool;
+    struct rte_hash *flow_table;
+    RandomForest *rf;
+};
+
 static int
 lcore_main(void *args)
 {
@@ -274,12 +391,15 @@ lcore_main(void *args)
     struct worker_args *w_args = (struct worker_args *)args;
     struct rte_mempool *mbuf_pool = w_args->mbuf_pool;
     struct rte_hash *flow_table = w_args->flow_table;
+    RandomForest *rf = w_args->rf;    
 
     uint16_t port;
     uint16_t ret;
 
     struct flow_key key;
     struct flow_entry entry;
+
+    double sample[5];
 
     RTE_ETH_FOREACH_DEV(port)
     if (rte_eth_dev_socket_id(port) >= 0 &&
@@ -454,10 +574,19 @@ lcore_main(void *args)
                                         if (ret < 0) {
                                             printf("Flow entry not found\n");
                                         } else {
-                                            printf("Flow entry found: %u client len, %u client exts_count, %u server len, %u server exts_count, \n"
-                                            , entry.client_len, entry.exts_num,temp_len,exts_nums);
+                                            // printf("Flow entry found: %u client len, %u client exts_count, %u server len, %u server exts_count, \n"
+                                            // , entry.client_len, entry.exts_num,temp_len,exts_nums);
                                             // rte_hash_del_key(flow_table, &key);
-                                            // exit(1);
+
+                                            sample[0] = entry.client_len;
+                                            sample[1] = entry.exts_num;
+                                            sample[2] = temp_len;
+                                            sample[3] = exts_nums;
+                                            sample[4] = 2;
+
+                                            int prediction = predict(rf, sample);
+                                            printf("Predicted class: %d\n", prediction);
+
                                         }
                                     }
                                 }
@@ -555,9 +684,17 @@ int main(int argc, char **argv)
         printf("port %u initialized\n",portid);
     };
 
+    RandomForest rf;
+
+    // Load the model from the JSON file
+    if (load_rf_model("../rf_model.json", &rf) != 0) {
+        return -1;
+    }
+
     struct worker_args arguments = {
         .mbuf_pool = mbuf_pool,
-        .flow_table = flow_table
+        .flow_table = flow_table,
+        .rf = &rf
     };
     
 
