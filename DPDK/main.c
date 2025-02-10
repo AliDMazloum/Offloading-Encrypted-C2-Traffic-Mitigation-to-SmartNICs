@@ -377,7 +377,8 @@ static int
 lcore_main(void *args)
 {
 
-    
+
+
     struct worker_args *w_args = (struct worker_args *)args;
     struct rte_mempool *mbuf_pool = w_args->mbuf_pool;
     struct rte_hash *flow_table = w_args->flow_table;
@@ -608,14 +609,15 @@ lcore_main(void *args)
 static void
 create_flow_rule(uint8_t port_id)
 {
+
     struct rte_flow *flow;
     struct rte_flow_attr flow_attr = {0};
     struct rte_flow_item pattern[2];
-    struct rte_flow_item_ipv4 ipv4_spec = {0};
-    struct rte_flow_item_ipv4 ipv4_mask = {0};
+    struct rte_flow_item_ipv4 ip_spec = {0};
+    struct rte_flow_item_ipv4 ip_mask = {0};
     struct rte_flow_action actions[2];
     struct rte_flow_action_port_id port_id_config = {
-        .id = port_id
+        .id = port_id,
     };
 
     struct rte_flow_action *action;
@@ -624,36 +626,47 @@ create_flow_rule(uint8_t port_id)
     memset(actions, 0, sizeof(actions));
 
     /* Create flow pattern for IPv4 */
-    memset(&ipv4_spec, 0, sizeof(struct rte_flow_item_ipv4));
-    memset(&ipv4_mask, 0, sizeof(struct rte_flow_item_ipv4));
+    memset(&ip_spec, 0, sizeof(struct rte_flow_item_ipv4));
+    memset(&ip_mask, 0, sizeof(struct rte_flow_item_ipv4));
+    ip_spec.hdr.dst_addr = 0;
+    ip_mask.hdr.dst_addr = 0;
+    ip_spec.hdr.src_addr = htonl(0);
+    ip_mask.hdr.src_addr = 0;
+
     pattern[0].type = RTE_FLOW_ITEM_TYPE_IPV4;
-    pattern[0].spec = &ipv4_spec;
-    pattern[0].mask = &ipv4_mask;
+    pattern[0].spec = &ip_spec;
+    pattern[0].mask = &ip_mask;
     pattern[1].type = RTE_FLOW_ITEM_TYPE_END;
 
     /* Set up the flow action */
     // action = &actions[0];
-    actions[0].type = RTE_FLOW_ACTION_TYPE_PORT_ID;
-    actions[0].conf = &port_id_config;
+    // actions[0].type = RTE_FLOW_ACTION_TYPE_PORT_ID;
+    // actions[0].conf = &port_id_config;
+    actions[0].type = RTE_FLOW_ACTION_TYPE_DROP;
+    actions[0].conf = NULL;
     actions[1].type = RTE_FLOW_ACTION_TYPE_END;
 
     memset(&flow_attr, 0, sizeof(struct rte_flow_attr));
     flow_attr.ingress = 1; // For inbound packets
 
     /* Create the flow rule */
-    struct rte_flow_error *error;
-    memset(&error,0,sizeof(struct rte_flow_error));
-    int res = rte_flow_validate(port_id, &flow_attr, pattern, action, error);
-    if(!res)
-        printf("error\n");
-        // flow = rte_flow_create(port_id, &flow_attr, pattern, action, NULL);
-    else
-        rte_exit(EXIT_FAILURE, "Failed to create flow rule\n");
+    struct rte_flow_error error;
+    memset(&error,0,sizeof(error));
+    // int res = rte_flow_validate(port_id, &flow_attr, pattern, actions, &error);
+    // if(!res)
+    //     printf("error\n");
+    //     // flow = rte_flow_create(port_id, &flow_attr, pattern, action, NULL);
+    // else
+    //     rte_exit(EXIT_FAILURE, "Failed to create flow rule\n");
     
     // flo<w = rte_flow_create(port_id, &flow_attr, pattern, actions, NULL);
     // if (flow == NULL) {
     //     rte_exit(EXIT_FAILURE, "Failed to create flow rule\n");
     // }>
+    flow = rte_flow_create(port_id, &flow_attr, pattern, actions, &error);
+    if (flow == NULL) {
+        rte_exit(EXIT_FAILURE, "Failed to create flow rule: %s\n", error.message);
+    }
 
     printf("Flow rule created successfully\n");
 }
