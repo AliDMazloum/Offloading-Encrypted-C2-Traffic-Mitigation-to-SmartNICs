@@ -61,14 +61,22 @@ header tcp_h {
     bit<16> urgent_ptr;
 }
 
+struct processing_time_digest {
+    bit<32> flow_ID;
+    bit<32> proc_time;
+}
+
 /***********************  I N G R E S S  H E A D E R S  ************************/
 struct my_ingress_headers_t {
     ethernet_h   ethernet;
     ipv4_h       ipv4;
+    tcp_h        tcp;
 }
 
 /******  G L O B A L   I N G R E S S   M E T A D A T A  *********/
 struct my_ingress_metadata_t {
+    bit<32> flow_ID;
+    bit<32> proc_time;
 
 }
 

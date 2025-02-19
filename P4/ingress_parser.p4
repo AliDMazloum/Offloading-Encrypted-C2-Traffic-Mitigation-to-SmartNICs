@@ -23,8 +23,21 @@ parser IngressParser(packet_in        pkt,
         }
     }
 
+    // state parse_ipv4 {
+    //     pkt.extract(hdr.ipv4);
+    //     transition accept;
+    // }
+
     state parse_ipv4 {
         pkt.extract(hdr.ipv4);
+        transition select(hdr.ipv4.protocol) {
+            IP_PROTOCOLS_TCP : parse_tcp;
+            default : accept;
+        }
+    }
+
+    state parse_tcp {
+        pkt.extract(hdr.tcp);
         transition accept;
     }
 
