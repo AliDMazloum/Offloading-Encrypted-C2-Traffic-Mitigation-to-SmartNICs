@@ -160,6 +160,7 @@ struct rte_server_hello_dpdk_hdr
     uint16_t version;
 } __rte_packed;
 
+static void create_flow_rule(uint16_t port_id, uint16_t actions_to_be_taken);
 
 /* >8 End of launching function on lcore. */
 static inline int
@@ -376,9 +377,6 @@ struct worker_args
 static int
 lcore_main(void *args)
 {
-
-
-
     struct worker_args *w_args = (struct worker_args *)args;
     struct rte_mempool *mbuf_pool = w_args->mbuf_pool;
     struct rte_hash *flow_table = w_args->flow_table;
@@ -411,9 +409,9 @@ lcore_main(void *args)
 
     for (;;)
     {
-        port=1;
-        // RTE_ETH_FOREACH_DEV(port)
-        // {
+        // port=1;
+        RTE_ETH_FOREACH_DEV(port)
+        {
             struct rte_mbuf *bufs[BURST_SIZE];
             
             uint16_t nb_rx = rte_eth_rx_burst(port, queue_id,
@@ -450,7 +448,7 @@ lcore_main(void *args)
                     if (ethernet_type == 2048)
                     // if (ethernet_type == 2000) // Client Hello packet from the P4
                     {
-                        ethernet_header->ether_type = rte_cpu_to_be_16(0x0700);
+                        // ethernet_header->ether_type = rte_cpu_to_be_16(0x0700);
 
                         uint32_t ipdata_offset = sizeof(struct rte_ether_hdr);
 
@@ -576,6 +574,8 @@ lcore_main(void *args)
                                             sample[4] = 2;
 
                                             int prediction = predict(rf, sample);
+                                            // create_flow_rule(0,prediction);
+
                                             printf("Predicted class: %d\n", prediction);
 
                                         }
@@ -600,14 +600,14 @@ lcore_main(void *args)
                 }
 
             }
-        // }
+        }
     }
 
     return 0;
 }
 
 static void
-create_flow_rule(uint8_t port_id)
+create_flow_rule(uint16_t port_id, uint16_t actions_to_be_taken)
 {
 
     struct rte_flow *flow;
@@ -616,42 +616,169 @@ create_flow_rule(uint8_t port_id)
     struct rte_flow_item_ipv4 ip_spec = {0};
     struct rte_flow_item_ipv4 ip_mask = {0};
     struct rte_flow_action actions[2];
+    struct rte_flow_action_queue queue = { .index = 0 };
     struct rte_flow_action_port_id port_id_config = {
-        .id = port_id,
+        .id = 0,
     };
+    // struct rte_flow_item_ethdev ethdev_port = {
+    //     .port_id = port_id
+    // };
+    // struct rte_flow_item_ethdev ethdev_mask = {
+    //     .port_id = 0xffff
+    // };
 
     struct rte_flow_action *action;
 
     memset(pattern, 0, sizeof(pattern));
     memset(actions, 0, sizeof(actions));
 
-    /* Create flow pattern for IPv4 */
-    memset(&ip_spec, 0, sizeof(struct rte_flow_item_ipv4));
-    memset(&ip_mask, 0, sizeof(struct rte_flow_item_ipv4));
-    ip_spec.hdr.dst_addr = 0;
-    ip_mask.hdr.dst_addr = 0;
-    ip_spec.hdr.src_addr = htonl(0);
-    ip_mask.hdr.src_addr = 0;
-
-    pattern[0].type = RTE_FLOW_ITEM_TYPE_IPV4;
-    pattern[0].spec = &ip_spec;
-    pattern[0].mask = &ip_mask;
-    pattern[1].type = RTE_FLOW_ITEM_TYPE_END;
-
-    /* Set up the flow action */
-    // action = &actions[0];
-    // actions[0].type = RTE_FLOW_ACTION_TYPE_PORT_ID;
-    // actions[0].conf = &port_id_config;
-    actions[0].type = RTE_FLOW_ACTION_TYPE_DROP;
-    actions[0].conf = NULL;
-    actions[1].type = RTE_FLOW_ACTION_TYPE_END;
-
-    memset(&flow_attr, 0, sizeof(struct rte_flow_attr));
-    flow_attr.ingress = 1; // For inbound packets
-
     /* Create the flow rule */
     struct rte_flow_error error;
     memset(&error,0,sizeof(error));
+
+    /* Set up the flow action */
+    memset(&flow_attr, 0, sizeof(struct rte_flow_attr));
+    if(actions_to_be_taken == 0){
+        
+        /* Create flow pattern for IPv4 */
+        memset(&ip_spec, 0, sizeof(struct rte_flow_item_ipv4));
+        memset(&ip_mask, 0, sizeof(struct rte_flow_item_ipv4));
+        ip_spec.hdr.dst_addr = 0;
+        ip_mask.hdr.dst_addr = 0;
+        ip_spec.hdr.src_addr = htonl(0);
+        ip_mask.hdr.src_addr = 0;
+
+        pattern[0].type = RTE_FLOW_ITEM_TYPE_IPV4;
+        // pattern[0].spec = &ip_spec;
+        // pattern[0].mask = &ip_mask;
+        pattern[1].type = RTE_FLOW_ITEM_TYPE_END;
+
+        actions[0].type = RTE_FLOW_ACTION_TYPE_PORT_ID;
+        actions[0].conf = &port_id_config;
+        actions[1].type = RTE_FLOW_ACTION_TYPE_END;
+        flow_attr.transfer = 1;
+        flow = rte_flow_create(0, &flow_attr, pattern, actions, &error);
+        if (flow == NULL) {
+            rte_exit(EXIT_FAILURE, "Failed to create flow rule: %s\n", error.message);
+        }
+        else{
+            printf("Flow with action %u is added on port %u\n", actions_to_be_taken, port_id);
+        }
+    }
+    else if(actions_to_be_taken == 1){
+
+        /* Create flow pattern for IPv4 */
+        memset(&ip_spec, 0, sizeof(struct rte_flow_item_ipv4));
+        memset(&ip_mask, 0, sizeof(struct rte_flow_item_ipv4));
+        ip_spec.hdr.dst_addr = htonl(0);
+        ip_mask.hdr.dst_addr = 0;
+        ip_spec.hdr.src_addr = htonl(0);
+        ip_mask.hdr.src_addr = 0;
+
+        pattern[0].type = RTE_FLOW_ITEM_TYPE_IPV4;
+        pattern[0].spec = &ip_spec;
+        pattern[0].mask = &ip_mask;
+        pattern[1].type = RTE_FLOW_ITEM_TYPE_END;
+
+        actions[0].type = RTE_FLOW_ACTION_TYPE_DROP;
+        actions[0].conf = NULL;
+        actions[1].type = RTE_FLOW_ACTION_TYPE_END;
+        // flow_attr.ingress = 1;
+        flow_attr.transfer = 1;
+        flow = rte_flow_create(port_id, &flow_attr, pattern, actions, &error);
+        if (flow == NULL) {
+            rte_exit(EXIT_FAILURE, "Failed to create flow rule: %s\n", error.message);
+        }
+        else{
+            printf("Flow with action %u is added on port %u\n", actions_to_be_taken, port_id);
+        }
+    }
+    else if(actions_to_be_taken == 2){
+
+        struct rte_flow_item_ethdev ethdev_port;
+        struct rte_flow_item_ethdev ethdev_mask;
+
+        struct rte_flow_action_ethdev ethdev_port_action;
+
+
+        memset(&ethdev_port, 0, sizeof(struct rte_flow_item_ethdev));
+        memset(&ethdev_mask, 0, sizeof(struct rte_flow_item_ethdev));
+        memset(&ethdev_port_action, 0, sizeof(struct rte_flow_action_ethdev));
+
+        ethdev_port.port_id = 0;
+        ethdev_mask.port_id = 0xffff;
+        ethdev_port_action.port_id = 1;
+        
+        pattern[0].type = RTE_FLOW_ITEM_TYPE_REPRESENTED_PORT;
+        pattern[0].spec = &ethdev_port;
+        pattern[0].mask = &ethdev_mask;
+        pattern[0].last = NULL;
+        pattern[1].type = RTE_FLOW_ITEM_TYPE_END;
+
+        // memset(&ip_spec, 0, sizeof(struct rte_flow_item_ipv4));
+        // memset(&ip_mask, 0, sizeof(struct rte_flow_item_ipv4));
+        // ip_spec.hdr.dst_addr = htonl(0);
+        // ip_mask.hdr.dst_addr = 0;
+        // ip_spec.hdr.src_addr = htonl(0);
+        // ip_mask.hdr.src_addr = 0;
+
+        // pattern[0].type = RTE_FLOW_ITEM_TYPE_IPV4;
+        // pattern[0].spec = &ip_spec;
+        // pattern[0].mask = &ip_mask;
+        // pattern[1].type = RTE_FLOW_ITEM_TYPE_END;
+
+        // actions[0].type = RTE_FLOW_ACTION_TYPE_DROP;
+        // actions[0].conf = NULL;
+        actions[0].type = RTE_FLOW_ACTION_TYPE_REPRESENTED_PORT;
+        actions[0].conf = &ethdev_port_action;
+        actions[1].type = RTE_FLOW_ACTION_TYPE_END;
+
+        flow_attr.transfer = 1;
+        
+        flow = rte_flow_create(port_id, &flow_attr, pattern, actions, &error);
+        if (flow == NULL) {
+            rte_exit(EXIT_FAILURE, "Failed to create flow rule: %s\n", error.message);
+        }
+        else{
+            printf("Flow with action %u is added on port %u\n", actions_to_be_taken, port_id);
+        }
+        
+    }
+    else if(actions_to_be_taken == 3){
+
+        /* Create flow pattern for IPv4 */
+        memset(&ip_spec, 0, sizeof(struct rte_flow_item_ipv4));
+        memset(&ip_mask, 0, sizeof(struct rte_flow_item_ipv4));
+        ip_spec.hdr.dst_addr = htonl(0);
+        ip_mask.hdr.dst_addr = 0;
+        ip_spec.hdr.src_addr = htonl(0);
+        ip_mask.hdr.src_addr = 0;
+
+        pattern[0].type = RTE_FLOW_ITEM_TYPE_IPV4;
+        pattern[0].spec = &ip_spec;
+        pattern[0].mask = &ip_mask;
+        pattern[1].type = RTE_FLOW_ITEM_TYPE_END;
+
+        actions[0].type = RTE_FLOW_ACTION_TYPE_QUEUE;
+        actions[0].conf = &queue;
+        actions[1].type = RTE_FLOW_ACTION_TYPE_END;
+
+        flow_attr.ingress = 1;
+        
+        flow = rte_flow_create(1, &flow_attr, pattern, actions, &error);
+        if (flow == NULL) {
+            rte_exit(EXIT_FAILURE, "Failed to create flow rule: %s\n", error.message);
+        }
+        else{
+            printf("Flow with action %u is added on port %u\n", actions_to_be_taken, port_id);
+        }
+        
+    }
+    // actions[0].type = RTE_FLOW_ACTION_TYPE_QUEUE;
+	// actions[0].conf = &queue;
+
+
+
     // int res = rte_flow_validate(port_id, &flow_attr, pattern, actions, &error);
     // if(!res)
     //     printf("error\n");
@@ -663,12 +790,9 @@ create_flow_rule(uint8_t port_id)
     // if (flow == NULL) {
     //     rte_exit(EXIT_FAILURE, "Failed to create flow rule\n");
     // }>
-    flow = rte_flow_create(port_id, &flow_attr, pattern, actions, &error);
-    if (flow == NULL) {
-        rte_exit(EXIT_FAILURE, "Failed to create flow rule: %s\n", error.message);
-    }
 
-    printf("Flow rule created successfully\n");
+
+    // printf("Flow rule created successfully\n");
 }
 
 
@@ -741,8 +865,9 @@ int main(int argc, char **argv)
         printf("port %u initialized\n",portid);
     };
 
-    // RTE_ETH_FOREACH_DEV(portid)
-    create_flow_rule(1);
+
+
+    // create_flow_rule(1,0);
     
 
     RandomForest rf;

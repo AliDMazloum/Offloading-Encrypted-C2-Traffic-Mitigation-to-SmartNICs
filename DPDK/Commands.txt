@@ -14,13 +14,13 @@ link: https://docs.nvidia.com/doca/archive/doca-v1.2/scalable-functions/index.ht
 command to display available SF:
     - mlnx-sf --action show
 commands to create and enable SF:
-    - /opt/mellanox/iproute2/sbin/mlxdevm port add pci/0000:03:00.0 flavour pcisf pfnum 0 sfnum 3
-    - /opt/mellanox/iproute2/sbin/mlxdevm port function set pci/0000:03:00.0/229337 hw_addr 00:00:00:00:03:0 trust on state active
-    - echo mlx5_core.sf.3  > /sys/bus/auxiliary/drivers/mlx5_core.sf_cfg/unbind
-    - echo mlx5_core.sf.3  > /sys/bus/auxiliary/drivers/mlx5_core.sf/bind
+    - /opt/mellanox/iproute2/sbin/mlxdevm port add pci/0000:03:00.0 flavour pcisf pfnum 0 sfnum 2
+    - /opt/mellanox/iproute2/sbin/mlxdevm port function set pci/0000:03:00.0/229376 hw_addr 00:00:00:00:02:0 trust on state active
+    - echo mlx5_core.sf.2  > /sys/bus/auxiliary/drivers/mlx5_core.sf_cfg/unbind
+    - echo mlx5_core.sf.2  > /sys/bus/auxiliary/drivers/mlx5_core.sf/bind
 commands to disable and remove SF:
-    - /opt/mellanox/iproute2/sbin/mlxdevm port function set pci/0000:03:00.0/229409 state inactive
-    - /opt/mellanox/iproute2/sbin/mlxdevm port del pci/0000:03:00.0/229409
+    - /opt/mellanox/iproute2/sbin/mlxdevm port function set pci/0000:03:00.0/229376 state inactive
+    - /opt/mellanox/iproute2/sbin/mlxdevm port del pci/0000:03:00.0/229376
 
 ### 
 
