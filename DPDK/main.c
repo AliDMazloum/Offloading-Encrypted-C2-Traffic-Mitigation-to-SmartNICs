@@ -446,10 +446,7 @@ lcore_main(void *args)
                     ethernet_type = rte_cpu_to_be_16(ethernet_type);
 
                     if (ethernet_type == 2048)
-                    // if (ethernet_type == 2000) // Client Hello packet from the P4
                     {
-                        // ethernet_header->ether_type = rte_cpu_to_be_16(0x0700);
-
                         uint32_t ipdata_offset = sizeof(struct rte_ether_hdr);
 
                         pIP4Hdr = rte_pktmbuf_mtod_offset(bufs[i], struct rte_ipv4_hdr *, ipdata_offset);
@@ -576,7 +573,7 @@ lcore_main(void *args)
                                             int prediction = predict(rf, sample);
                                             // create_flow_rule(0,prediction);
 
-                                            printf("Predicted class: %d\n", prediction);
+                                            // printf("Predicted class: %d\n", prediction);
 
                                         }
                                     }
@@ -620,12 +617,6 @@ create_flow_rule(uint16_t port_id, uint16_t actions_to_be_taken)
     struct rte_flow_action_port_id port_id_config = {
         .id = 0,
     };
-    // struct rte_flow_item_ethdev ethdev_port = {
-    //     .port_id = port_id
-    // };
-    // struct rte_flow_item_ethdev ethdev_mask = {
-    //     .port_id = 0xffff
-    // };
 
     struct rte_flow_action *action;
 
