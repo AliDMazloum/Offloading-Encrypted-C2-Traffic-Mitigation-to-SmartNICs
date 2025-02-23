@@ -62,7 +62,7 @@ header tcp_h {
 }
 
 struct processing_time_digest {
-    bit<32> flow_ID;
+    bit<16> flow_ID;
     bit<32> proc_time;
 }
 
@@ -75,7 +75,7 @@ struct my_ingress_headers_t {
 
 /******  G L O B A L   I N G R E S S   M E T A D A T A  *********/
 struct my_ingress_metadata_t {
-    bit<32> flow_ID;
+    bit<16> flow_ID;
     bit<32> proc_time;
 
 }

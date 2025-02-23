@@ -11,16 +11,16 @@ control Ingress(
 
     #define TIMESTAMP ig_intr_md.ingress_mac_tstamp[31:0]
     /* Register for Server Hello First Observation Timestamp */
-    Register<bit<32>,bit<(32)>>(100000) timer_reg;
+    Register<bit<32>,bit<(16)>>(65536) timer_reg;
     /* Register initial observation timestamp*/
-    RegisterAction<bit<32>,bit<(32)>,bit<32>>(timer_reg)
+    RegisterAction<bit<32>,bit<(16)>,bit<32>>(timer_reg)
     set_timer = {
         void apply(inout bit<32> timestamp) {
             timestamp = TIMESTAMP;
         }
     };
     /* Calculate DPDK processing time */
-    RegisterAction<bit<32>,bit<(32)>,bit<32>>(timer_reg)
+    RegisterAction<bit<32>,bit<(16)>,bit<32>>(timer_reg)
     get_timer = {
         void apply(inout bit<32> timestamp,out bit<32> output) {
             if(timestamp < TIMESTAMP && timestamp > 0){
@@ -36,7 +36,7 @@ control Ingress(
     /*---------------------------------------start Hash Defenisions ------------------------------------*/
 
     /* Declaration of the hashes*/
-    Hash<bit<(32)>>(HashAlgorithm_t.CRC32)     flow_id_calc;
+    Hash<bit<(16)>>(HashAlgorithm_t.CRC16)     flow_id_calc;
 
     /* Calculate hash of the 5-tuple to represent the flow ID */
     action get_flow_ID() {
@@ -45,20 +45,31 @@ control Ingress(
 
 
     apply {
-        
-        if(ig_intr_md.ingress_port == 132 || ig_intr_md.ingress_port == 140){
-            if(hdr.tcp.isValid()){
-                get_flow_ID();
+
+        get_flow_ID();
+        if(ig_intr_md.ingress_port == 132){
+            if(hdr.tcp.isValid()) {
                 set_timer.execute(meta.flow_ID);
             }
             ig_tm_md.ucast_egress_port = 156;
         }
+        else if(ig_intr_md.ingress_port == 140){
+            // if(hdr.tcp.isValid()) {
+            //     set_timer.execute(meta.flow_ID);
+            // }
+            ig_tm_md.ucast_egress_port = 148;
+        }
+        else if(ig_intr_md.ingress_port == 148){
+            // if(hdr.tcp.isValid()) {
+            //     meta.proc_time = get_timer.execute(meta.flow_ID);
+            // }
+            ig_tm_md.ucast_egress_port = 140;
+        }
         else if(ig_intr_md.ingress_port == 156){
-            // ig_dprsr_md.digest_type = 1;
-            if(hdr.tcp.isValid()){
-                get_flow_ID();
+            if(hdr.tcp.isValid()) {
                 meta.proc_time = get_timer.execute(meta.flow_ID);
             }
+            ig_dprsr_md.digest_type = 1;
             ig_tm_md.ucast_egress_port = 132;
         }
     }
