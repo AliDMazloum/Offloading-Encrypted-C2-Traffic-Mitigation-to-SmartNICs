@@ -53,6 +53,7 @@
 #include <jansson.h>
 
 #include <rte_flow.h>
+#include <signal.h>
 
 #define RX_RING_SIZE (1 << 14)
 #define TX_RING_SIZE (1 << 14)
@@ -367,20 +368,31 @@ int predict(RandomForest *rf, double *sample) {
     return final_prediction;
 }
 
-struct worker_args
+// struct worker_args
+// {
+//     struct rte_mempool *mbuf_pool;
+//     struct rte_hash *flow_table;
+//     RandomForest *rf;
+//     int packet_counters[10];
+// };
+
+struct
 {
     struct rte_mempool *mbuf_pool;
     struct rte_hash *flow_table;
     RandomForest *rf;
-};
+    int packet_counters[10];
+}worker_args;
 
 static int
 lcore_main(void *args)
 {
-    struct worker_args *w_args = (struct worker_args *)args;
-    struct rte_mempool *mbuf_pool = w_args->mbuf_pool;
-    struct rte_hash *flow_table = w_args->flow_table;
-    RandomForest *rf = w_args->rf;    
+    // struct worker_args *w_args = (struct worker_args *)args;
+    struct rte_mempool *mbuf_pool = worker_args.mbuf_pool;
+    struct rte_hash *flow_table = worker_args.flow_table;
+    RandomForest *rf = worker_args.rf;
+    // int core_id = rte_lcore_id();
+    // int *packet_counter = &worker_args.packet_counters[core_id];
 
     uint16_t port;
     uint16_t ret;
@@ -403,7 +415,7 @@ lcore_main(void *args)
            rte_lcore_id());
 
 
-    uint16_t pkt_count = 0;
+    uint32_t pkt_count = 0;
     uint16_t queue_id =  rte_lcore_id() - 1;
 
 
@@ -420,6 +432,7 @@ lcore_main(void *args)
             // break;
             if (nb_rx > 0)
             {
+                // *packet_counter +=nb_rx;
                 // printf("Ali \n");
                 // uint64_t timestamp = rte_get_tsc_cycles();
                 // uint64_t tsc_hz = rte_get_tsc_hz();
@@ -440,7 +453,7 @@ lcore_main(void *args)
                 u_int16_t ethernet_type;
                 for (int i = 0; i < nb_rx; i++)
                 {
-                    pkt_count +=1;
+                    // pkt_count +=1;
                     ethernet_header = rte_pktmbuf_mtod(bufs[i], struct rte_ether_hdr *);
                     ethernet_type = ethernet_header->ether_type;
                     ethernet_type = rte_cpu_to_be_16(ethernet_type);
@@ -571,9 +584,14 @@ lcore_main(void *args)
                                             sample[4] = 2;
 
                                             int prediction = predict(rf, sample);
+                                            ret = rte_hash_del_key(flow_table, &key);
+                                            if (ret < 0) {
+                                                printf("Flow entry cannot be deleted\n");
+                                            } 
                                             // create_flow_rule(0,prediction);
-
-                                            // printf("Predicted class: %d\n", prediction);
+                                            // if(prediction !=1){
+                                            //     printf("Predicted class: %d\n", prediction);
+                                            // }
 
                                         }
                                     }
@@ -595,6 +613,8 @@ lcore_main(void *args)
                     for (buf = nb_tx; buf < nb_rx; buf++)
                         rte_pktmbuf_free(bufs[buf]); 
                 }
+
+                // printf("Core %u proceesed %u packets\n",core_id,*packet_counter);
 
             }
         }
@@ -814,6 +834,7 @@ int main(int argc, char **argv)
     uint16_t portid;
     unsigned lcore_id;
     int ret;
+    // int packet_counters[10] = {0};
 
     ret = rte_eal_init(argc, argv);
     if (ret < 0)
@@ -856,11 +877,8 @@ int main(int argc, char **argv)
         printf("port %u initialized\n",portid);
     };
 
-
-
     // create_flow_rule(1,0);
     
-
     RandomForest rf;
 
     // Load the model from the JSON file
@@ -868,17 +886,38 @@ int main(int argc, char **argv)
         return -1;
     }
 
-    struct worker_args arguments = {
-        .mbuf_pool = mbuf_pool,
-        .flow_table = flow_table,
-        .rf = &rf
-    };
-    
+    // struct worker_args arguments = {
+    //     .mbuf_pool = mbuf_pool,
+    //     .flow_table = flow_table,
+    //     .rf = &rf,
+    //     // .packet_counters = packet_counters[0]
+    // };
+    worker_args.mbuf_pool = mbuf_pool;
+    worker_args.flow_table = flow_table;
+    worker_args.rf = &rf;
 
     RTE_LCORE_FOREACH_WORKER(lcore_id)
     {
-        rte_eal_remote_launch(lcore_main, &arguments, lcore_id);
+        rte_eal_remote_launch(lcore_main, &worker_args, lcore_id);
     }
+
+    char command[50];
+
+    int *packet_counters = worker_args.packet_counters;
+    // while (1) {
+    //     printf("Enter command: ");
+    //     scanf("%s", command);
+    //     // printf("The input command is %s\n",command);
+
+    //     if (strcmp(command, "get_stats") == 0) {
+    //         RTE_LCORE_FOREACH_WORKER(lcore_id)
+    //         {
+    //             printf("Core %u processed %u packets\n",lcore_id,packet_counters[lcore_id]);
+    //             // packet_counters[lcore_id] = 0;
+    //         }
+    //         // break;
+    //     }
+    // }
 
 
     rte_eal_mp_wait_lcore();
