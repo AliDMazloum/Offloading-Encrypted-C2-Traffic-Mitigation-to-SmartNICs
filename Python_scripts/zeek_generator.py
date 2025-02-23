@@ -51,8 +51,8 @@ def generate_logs(directory, zeek_script):
             for pcap_file in pcap_files12:
                 pcap_file_name = os.path.splitext(pcap_file)[0]
                 modified_script = zeek_script_template.replace("{pcap_file_name}", pcap_file_name)
-                tls_version = "2"
-                modified_script = modified_script.replace("{tls_version}", str(tls_version))
+                # tls_version = "2"
+                # modified_script = modified_script.replace("{tls_version}", str(tls_version))
                 zeek_script_filename = os.path.join(directory, "parser.zeek")
                 with open(zeek_script_filename, 'w') as script_file:
                     script_file.write(modified_script)
@@ -68,8 +68,8 @@ def generate_logs(directory, zeek_script):
             for pcap_file in pcap_files13:
                 pcap_file_name = os.path.splitext(pcap_file)[0]
                 modified_script = zeek_script_template.replace("{pcap_file_name}", pcap_file_name)
-                tls_version = "3"
-                modified_script = modified_script.replace("{tls_version}", tls_version)
+                # tls_version = "3"
+                # modified_script = modified_script.replace("{tls_version}", tls_version)
                 zeek_script_filename = os.path.join(directory, "parser.zeek")
                 with open(zeek_script_filename, 'w') as script_file:
                     script_file.write(modified_script)

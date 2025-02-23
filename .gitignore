@@ -1,8 +1,3 @@
 *.pcap
-malicious_DoHBrw_tls13_ether
-datasets/ms/*
-datasets/ms
-datasets/tranco
-datasets/tranco/*
 test.csv
 x.txt
