@@ -20,7 +20,7 @@ event zeek_init(){
     print ("Zeek starts here");
     Log::create_stream(testing::tls_packet_lengths, [$columns=tls_records]);
     local f=Log::get_filter(testing::tls_packet_lengths, "default");
-    f$path = "{pcap_file_name}";
+    f$path = "tranco_tls13_2024_01_30";
     Log::add_filter(testing::tls_packet_lengths,f);
 }
 
