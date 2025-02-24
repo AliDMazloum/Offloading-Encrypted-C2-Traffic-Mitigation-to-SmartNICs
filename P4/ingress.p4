@@ -69,7 +69,9 @@ control Ingress(
             if(hdr.tcp.isValid()) {
                 meta.proc_time = get_timer.execute(meta.flow_ID);
             }
-            ig_dprsr_md.digest_type = 1;
+            if(meta.proc_time > 0){
+                ig_dprsr_md.digest_type = 1;
+            }
             ig_tm_md.ucast_egress_port = 132;
         }
     }
