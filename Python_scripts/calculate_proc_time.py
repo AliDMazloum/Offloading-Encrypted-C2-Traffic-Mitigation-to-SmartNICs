@@ -45,7 +45,7 @@ def generate_logs(directory):
             "--mtu=1400", 
             "--mtu-trunc", 
             "-i", "eth1", 
-            "--mbps=100", 
+            "--mbps=2000", 
             pcap_file_path
         ])
         if result.returncode != 0:
