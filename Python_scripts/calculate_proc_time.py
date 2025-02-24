@@ -17,7 +17,7 @@ for dirpath, dirnames, filenames in os.walk(root_dir):
         directories.append(dirpath)
 
 def generate_logs(directory):
-    proc_logs_dir = directory+"/proc_logs"
+    proc_logs_dir = directory+"/proc_logs_30Gbps"
     try:
         os.system(f"sudo ssh -t root@172.168.1.2 'cd /home/C2_TLS/; mkdir {proc_logs_dir}'")
     except:
@@ -45,7 +45,7 @@ def generate_logs(directory):
             "--mtu=1400", 
             "--mtu-trunc", 
             "-i", "eth1", 
-            "--mbps=2000", 
+            "--mbps=10000", 
             pcap_file_path
         ])
         if result.returncode != 0:
