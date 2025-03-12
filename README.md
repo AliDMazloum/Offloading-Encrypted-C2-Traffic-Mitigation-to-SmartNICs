@@ -1,4 +1,4 @@
-# Toward Fingerprinting C2 traffic in the Pata Plane
+# Offloading-Encrypted-C2-Traffic-Mitigation-to-SmartNICs
     This directory contains the source code of paper Toward Fingerprinting C2 traffic in the Pata Plane. The code can be divided as follows:
 
         Zeek_scripts/ contains the scripts used to parse the PCAP files.
