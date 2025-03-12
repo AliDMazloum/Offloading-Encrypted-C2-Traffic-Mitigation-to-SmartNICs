@@ -55,13 +55,17 @@
 #include <rte_flow.h>
 #include <signal.h>
 
-#define RX_RING_SIZE (1 << 14)
-#define TX_RING_SIZE (1 << 14)
+#define RX_RING_SIZE (1 << 15)
+#define TX_RING_SIZE (1 << 15)
 
 #define NUM_MBUFS (1 << 16)
-#define BURST_SIZE (1 << 6)
+// #define BURST_SIZE (1 << 9)
 
-#define QUEUE_SIZE (1 << 13)
+#define QUEUE_SIZE 128
+
+#define BURST_SIZE 64
+
+// #define QUEUE_SIZE (1 << 6)
 
 #define MBUF_CACHE_SIZE 256
 
@@ -384,6 +388,12 @@ struct
     int packet_counters[10];
 }worker_args;
 
+double right_predictions=0;
+double wrong_predictions=0;
+
+double received_packets=0;
+double processed_packets=0;
+
 static int
 lcore_main(void *args)
 {
@@ -437,6 +447,7 @@ lcore_main(void *args)
                 // uint64_t timestamp = rte_get_tsc_cycles();
                 // uint64_t tsc_hz = rte_get_tsc_hz();
                 // double timestamp_us = (double)timestamp / tsc_hz * 1e6;
+                received_packets+=nb_rx;
                 struct rte_ether_hdr *ethernet_header; 
                 struct rte_ipv4_hdr *pIP4Hdr;
                 struct rte_tcp_hdr *pTcpHdr;
@@ -507,7 +518,7 @@ lcore_main(void *args)
                                         bool blacklisted = false;
 
                                         uint16_t exts_nums = 0x0;
-                                        while (exts_len > 0)
+                                        while (exts_len > 0 && tlsdata_offset < 1450)
                                         {
                                             exts_nums +=1;
                                             pTlsExtHdr = rte_pktmbuf_mtod_offset(bufs[i], struct rte_tls_ext_hdr *, tlsdata_offset);
@@ -553,7 +564,7 @@ lcore_main(void *args)
                                         tlsdata_offset += sizeof(struct rte_tls_ext_len_hdr);
 
                                         uint16_t exts_nums = 0;
-                                        while (exts_len >= 1)
+                                        while (exts_len >= 1 && tlsdata_offset < 1450)
                                         {
                                             exts_nums +=1;
                                             pTlsExtHdr = rte_pktmbuf_mtod_offset(bufs[i], struct rte_tls_ext_hdr *, tlsdata_offset);
@@ -589,8 +600,15 @@ lcore_main(void *args)
                                                 printf("Flow entry cannot be deleted\n");
                                             } 
                                             // create_flow_rule(0,prediction);
-                                            // if(prediction !=1){
+                                            // if(prediction !=0){
                                             //     printf("Predicted class: %d\n", prediction);
+                                            // }
+
+                                            // if(prediction == 1){
+                                            //     right_predictions+=1;
+                                            // }
+                                            // else if(prediction == 0){
+                                            //     wrong_predictions+=1;
                                             // }
 
                                         }
@@ -606,9 +624,13 @@ lcore_main(void *args)
                 const uint16_t nb_tx = rte_eth_tx_burst(port, queue_id,
                                                         bufs, nb_rx);
 
+                processed_packets += nb_tx;
+
                 if (unlikely(nb_tx < nb_rx))
                 {
                     uint16_t buf;
+
+                    // printf("SOme packets are not processed\n");
 
                     for (buf = nb_tx; buf < nb_rx; buf++)
                         rte_pktmbuf_free(bufs[buf]); 
@@ -904,20 +926,43 @@ int main(int argc, char **argv)
     char command[50];
 
     int *packet_counters = worker_args.packet_counters;
-    // while (1) {
-    //     printf("Enter command: ");
-    //     scanf("%s", command);
-    //     // printf("The input command is %s\n",command);
 
-    //     if (strcmp(command, "get_stats") == 0) {
-    //         RTE_LCORE_FOREACH_WORKER(lcore_id)
-    //         {
-    //             printf("Core %u processed %u packets\n",lcore_id,packet_counters[lcore_id]);
-    //             // packet_counters[lcore_id] = 0;
-    //         }
-    //         // break;
-    //     }
-    // }
+
+    while (1) {
+        printf("Enter command: ");
+        scanf("%s", command);
+        // printf("The input command is %s\n",command);
+
+        if (strcmp(command, "get_stats") == 0) {
+            RTE_LCORE_FOREACH_WORKER(lcore_id)
+            {
+
+                char output_file[50]; //= "../datasets/DoHBrw/predictions.txt";
+                
+                printf("Enter file name: ");
+                scanf("%s", output_file);   
+
+                FILE *file = fopen(output_file, "w");
+
+                if (file == NULL) {
+                    printf("Error opening the file.\n");
+                    return -1;
+                }
+
+                fprintf(file, "Received Processed Dropped\n");
+                // printf("Core %u processed %u packets\n",lcore_id,packet_counters[lcore_id]);
+                fprintf(file, "%f %f %.3f \n",received_packets,processed_packets,(double)(processed_packets/received_packets));
+                right_predictions = 0;
+                wrong_predictions = 0;
+                received_packets = 0;
+                processed_packets = 0;
+
+                fclose(file);
+                // packet_counters[lcore_id] = 0;
+            }
+            // break;
+        }
+    }
 
 
     rte_eal_mp_wait_lcore();
