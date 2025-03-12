@@ -1,0 +1,10 @@
+#separator \x09
+#set_separator	,
+#empty_field	(empty)
+#unset_field	-
+#path	dump_cloudFlare_2
+#open	2025-01-28-21-08-44
+#fields	tls_flows	packets_parsed_in_P4	packets_parsed_in_DPDK	packet_ratio	bytes_parsed_in_P4	bytes_parsed_in_DPDK	bytes_ratio
+#types	double	double	double	double	double	double	double
+63528.0	5093161.0	127530.0	2.503946	4642788038.0	176621572.0	3.804214
+#close	2025-01-28-21-08-44

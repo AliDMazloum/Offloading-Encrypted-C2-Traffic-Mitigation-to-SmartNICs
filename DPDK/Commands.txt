@@ -1,0 +1,44 @@
+### Run the application ###
+cd /home/ubuntu/dpdk/build
+./app/dpdk-test-regex -a 0000:03:00.0,class=regex -- --nb_lcores 1 --nb_iter 1 --rules /home/ubuntu/rof/.rof2.binary --nb_qps 1 --nb_jobs 10 --data /home/ubuntu/data.txt
+###
+
+### compile the rules ###
+# -f /home/ubuntu/rules/regex_rules.txt: is the path to the file containing the regex_rules
+# -o /home/ubuntu/rof/ the path to the directory where the rof binary is to be stored
+rxpc -f /home/ubuntu/dpdk/examples/C2_TLS/blacklist.txt -o /home/ubuntu/rof/
+###
+
+### Setting scalable functions ###
+link: https://docs.nvidia.com/doca/archive/doca-v1.2/scalable-functions/index.html
+command to display available SF:
+    - mlnx-sf --action show
+commands to create and enable SF:
+    - /opt/mellanox/iproute2/sbin/mlxdevm port add pci/0000:03:00.0 flavour pcisf pfnum 0 sfnum 2
+    - /opt/mellanox/iproute2/sbin/mlxdevm port function set pci/0000:03:00.0/229376 hw_addr 00:00:00:00:02:0 trust on state active
+    - echo mlx5_core.sf.2  > /sys/bus/auxiliary/drivers/mlx5_core.sf_cfg/unbind
+    - echo mlx5_core.sf.2  > /sys/bus/auxiliary/drivers/mlx5_core.sf/bind
+commands to disable and remove SF:
+    - /opt/mellanox/iproute2/sbin/mlxdevm port function set pci/0000:03:00.0/229376 state inactive
+    - /opt/mellanox/iproute2/sbin/mlxdevm port del pci/0000:03:00.0/229376
+
+### 
+
+### Setting scalable functions ###
+    1. Create the bridge:
+        -ovs-vsctl add-br br1
+    2. Add the ports
+        -ovs-vsctl add-port br1 p1
+        -ovs-vsctl add-port br1 en3f0pf0sf3
+    3. Define the forwarding rules # use "ovs-vsctl list interface en3f0pf0sf4" to get the interface ID in ovs
+        -ovs-ofctl add-flow br1 in_port=1,action=output:2
+        -ovs-ofctl add-flow br1 in_port=2,action=output:1
+
+
+###
+
+### Starting the DPDK application ###
+# The command should be issued from: /home/ubuntu/dpdk/build
+./build/C2_TLS -a 0000:03:00.0,class=regex -a auxiliary:mlx5_core.sf.2 -a auxiliary:mlx5_core.sf.3 -l 0-1
+
+###

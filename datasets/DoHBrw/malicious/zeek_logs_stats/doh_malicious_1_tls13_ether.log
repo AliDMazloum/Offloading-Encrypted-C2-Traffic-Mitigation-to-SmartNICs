@@ -1,0 +1,10 @@
+#separator \x09
+#set_separator	,
+#empty_field	(empty)
+#unset_field	-
+#path	doh_malicious_1_tls13_ether
+#open	2025-01-28-21-13-50
+#fields	tls_flows	packets_parsed_in_P4	packets_parsed_in_DPDK	packet_ratio	bytes_parsed_in_P4	bytes_parsed_in_DPDK	bytes_ratio
+#types	double	double	double	double	double	double	double
+107367.0	7012091.0	216053.0	3.081149	920197282.0	210835466.0	22.911985
+#close	2025-01-28-21-13-50
